@@ -1,12 +1,10 @@
 /**
  * Pyodide · molpy — MolVis page plugin.
  *
- * Domains:
- * - modes: Python notebook panel (right tools tab)
- * - panels: bottom Console (xterm)
- * - dialogs: Script editor (Monaco)
- * - commands: toolbar opens Script
- * - settings: about
+ * Entry via host **command palette** (Ctrl/Cmd+Shift+P), not native chrome:
+ * - Mode "Python" → notebook panel (right tools workbench)
+ * - Command "Script" → Monaco dialog
+ * - Panel "Console" → bottom xterm
  *
  * InProcess bridge: stage.camera.* → live app.world.camera
  */
@@ -69,13 +67,27 @@ export function registerPyodideMolpy(api: PluginAPI): void {
   api.commands.register(
     "open-script",
     () => {
-      /* host opens dialog via toolbar.opensDialog */
+      /* host opens dialog via palette metadata opensDialog */
     },
     {
       toolbar: {
-        label: "Script",
+        label: "Python: Open script",
         order: 45,
         opensDialog: "script",
+      },
+    },
+  );
+
+  // Palette entry that switches to the Python workbench (mode + notebook panel).
+  api.commands.register(
+    "open-notebook",
+    () => {
+      api.app.setMode(`plugin.${api.pluginId}.python`);
+    },
+    {
+      toolbar: {
+        label: "Python: Notebook",
+        order: 40,
       },
     },
   );
