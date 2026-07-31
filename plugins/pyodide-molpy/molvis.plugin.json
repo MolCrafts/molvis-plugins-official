@@ -1,0 +1,8 @@
+{
+  "id": "com.molcrafts.pyodide-molpy",
+  "name": "Pyodide · molpy",
+  "version": "0.1.0",
+  "molvis": ">=0.1.0",
+  "entry": "dist/plugin.js",
+  "description": "Browser Python (Pyodide) with molpy: notebook cells, script editor, console"
+}

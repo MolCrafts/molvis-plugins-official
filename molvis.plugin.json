@@ -1,0 +1,8 @@
+{
+  "id": "com.molcrafts.plugins-official",
+  "name": "MolVis Plugins Official",
+  "version": "0.1.0",
+  "molvis": ">=0.1.0",
+  "entry": "dist/plugin.js",
+  "description": "Official collection meta-plugin (includes LAMMPS input generator and Alchemist)"
+}

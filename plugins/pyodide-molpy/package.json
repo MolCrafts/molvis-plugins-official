@@ -1,0 +1,30 @@
+{
+  "name": "@molcrafts/molvis-plugin-pyodide-molpy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MolVis plugin: Pyodide + molpy notebook cells, script modal, console",
+  "license": "BSD-3-Clause",
+  "scripts": {
+    "build": "rsbuild build",
+    "typecheck": "tsc --noEmit",
+    "test": "rstest run",
+    "check": "npm run typecheck && npm run test && npm run build"
+  },
+  "peerDependencies": {
+    "@molcrafts/molvis-core": ">=0.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@molcrafts/molvis-core": "^0.1.1",
+    "@rsbuild/core": "^2.0.0",
+    "@rstest/core": "^0.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.8.0"
+  }
+}

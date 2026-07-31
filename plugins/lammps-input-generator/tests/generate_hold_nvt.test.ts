@@ -1,0 +1,71 @@
+import { describe, expect, it } from "@rstest/core";
+import { generateLammpsEqInput } from "../src/generate/generate";
+import type { LammpsEqConfig } from "../src/model/types";
+
+function holdNvtConfig(): LammpsEqConfig {
+  return {
+    init: {
+      units: "real",
+      atomStyle: "full",
+      boundary: ["p", "p", "p"],
+      dataFile: "data.lmp",
+      timestep: 1.0,
+      thermoEvery: 1000,
+      thermoStyle: "custom step temp pe ke etotal press vol",
+      neighborSkin: 2.0,
+      neighborCheck: true,
+      forceField: {
+        pairStyle: "lj/cut/coul/long 12.0",
+        pairCoeff: "* * 0.1 3.5",
+        extraLines: "",
+        includeCommentedStubs: true,
+      },
+    },
+    minimize: null,
+    tempPoints: [
+      {
+        id: "p0",
+        name: "start",
+        step: 0,
+        temperature: 300,
+        ensemble: "nvt",
+      },
+      {
+        id: "p1",
+        name: "NVT hold",
+        step: 50_000,
+        temperature: 300,
+        ensemble: "nvt",
+        thermostat: "nose-hoover",
+        tdamp: 100,
+      },
+    ],
+    output: {
+      dump: null,
+      restart: null,
+      writeData: null,
+    },
+  };
+}
+
+describe("generateLammpsEqInput hold NVT", () => {
+  it("emits units, read_data, FF placeholders, and nvt fix from 调温点", () => {
+    const script = generateLammpsEqInput(holdNvtConfig());
+    expect(script).toContain("units           real");
+    expect(script).toContain("read_data       data.lmp");
+    expect(script).toContain(
+      "# --- force field (placeholders — edit for your system) ---",
+    );
+    expect(script).toContain("pair_style      lj/cut/coul/long 12.0");
+    expect(script).toContain("pair_coeff      * * 0.1 3.5");
+    expect(script).toContain("# bond_style     harmonic");
+    expect(script).toContain("# kspace_style   pppm 1.0e-4");
+    expect(script).toContain("# --- eq stage 1: NVT hold ---");
+    expect(script).toContain(
+      "fix             1 all nvt temp 300 300 100",
+    );
+    expect(script).toContain("run             50000");
+    expect(script).toContain("unfix           1");
+    expect(script).not.toContain("minimize");
+  });
+});

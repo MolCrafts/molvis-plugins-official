@@ -1,0 +1,54 @@
+{
+  "name": "@molcrafts/molvis-plugins-official",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Official MolVis page plugin collection (meta + per-plugin packages)",
+  "license": "BSD-3-Clause",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MolCrafts/molvis-plugins-official.git"
+  },
+  "homepage": "https://github.com/MolCrafts/molvis-plugins-official",
+  "bugs": {
+    "url": "https://github.com/MolCrafts/molvis-plugins-official/issues"
+  },
+  "keywords": [
+    "molvis",
+    "molcrafts",
+    "plugin",
+    "lammps",
+    "molecular-visualization"
+  ],
+  "workspaces": [
+    "plugins/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @molcrafts/molvis-plugin-lammps-input-generator && npm run build -w @molcrafts/molvis-plugin-alchemist && npm run build -w @molcrafts/molvis-plugin-pyodide-molpy && npm run build:meta",
+    "build:meta": "rsbuild build",
+    "typecheck": "npm run typecheck -w @molcrafts/molvis-plugin-lammps-input-generator && npm run typecheck -w @molcrafts/molvis-plugin-alchemist && npm run typecheck -w @molcrafts/molvis-plugin-pyodide-molpy && tsc --noEmit -p tsconfig.json",
+    "test": "npm run test -w @molcrafts/molvis-plugin-lammps-input-generator && npm run test -w @molcrafts/molvis-plugin-alchemist && npm run test -w @molcrafts/molvis-plugin-pyodide-molpy",
+    "test:e2e": "npm run test:e2e -w @molcrafts/molvis-plugin-alchemist",
+    "check": "npm run typecheck && npm run test && npm run build",
+    "prepublishOnly": "npm run check"
+  },
+  "peerDependencies": {
+    "@molcrafts/molplot": ">=0.1.0",
+    "@molcrafts/molrs": ">=0.10.0",
+    "@molcrafts/molvis-core": ">=0.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@molcrafts/molplot": "^0.1.3",
+    "@molcrafts/molrs": "^0.10.0",
+    "@molcrafts/molvis-core": "^0.1.1",
+    "@rsbuild/core": "^2.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.8.0"
+  },
+  "packageManager": "npm@11.17.0+sha512.3eeaf18997b11070d313849268b23766b9db0068997dec9471073170fe43fa17f2b4d0337bf0f52330ee2274e7f5754b21b01052742e48f5c9c74d8b1e32ef43"
+}
