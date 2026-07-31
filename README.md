@@ -9,7 +9,7 @@ plugins. Scaffolded from
 | Install | Source |
 |---------|--------|
 | **All official plugins (meta)** | `MolCrafts/molvis-plugins-official` (no tag → **latest release**) |
-| **Pin a version** | `MolCrafts/molvis-plugins-official@v0.1.0` |
+| **Pin a version** | `MolCrafts/molvis-plugins-official@v0.1.2` |
 | **LAMMPS input generator only** | CDN subdir URL to `plugins/lammps-input-generator/` |
 | **Alchemist only** | CDN subdir URL to `plugins/alchemist/` |
 | **Pyodide · molpy only** | CDN subdir URL to `plugins/pyodide-molpy/` |
@@ -80,11 +80,26 @@ git tree.
 git tag v0.1.0 && git push origin main --tags
 ```
 
+## Toolchain (required)
+
+Plugins **must** track the host React singleton and modern compiler defaults:
+
+| Piece | Baseline |
+|-------|----------|
+| React / ReactDOM | **^19.2.8** (peer; never bundle) |
+| JSX | **automatic** via `@rsbuild/plugin-react` (`runtime: "automatic"`) |
+| TypeScript | **^7** · `target`/`lib` **ES2024** · `jsx: "react-jsx"` |
+| Style | Function components + hooks only; no classic `React.createElement` free calls; no class components for UI |
+| Discovery | **Command palette** only (`Ctrl/Cmd+Shift+P`) — do **not** inject toolbar / tabs / settings chrome into the native shell |
+
+Shared build options live in [`rsbuild.plugin-shared.ts`](./rsbuild.plugin-shared.ts).
+
 ## Peers (externalize — never bundle)
 
 | Package | Why |
 |---------|-----|
-| `react` / `react-dom` / `react/jsx-runtime` | Shared React tree |
+| `react` / `react-dom` / `react-dom/client` | Shared React 19 tree |
+| `react/jsx-runtime` / `react/jsx-dev-runtime` | Automatic JSX (plugin-react) |
 | `@molcrafts/molvis-core` / stage aliases | Engine |
 | `@molcrafts/molrs` | Shared WASM |
 | `@molcrafts/molplot` | Shared Vega charts |
