@@ -24,6 +24,16 @@ export default defineConfig({
     template: false as unknown as string,
   },
   tools: {
+    swc: {
+      jsc: {
+        transform: {
+          react: {
+            runtime: "automatic",
+            importSource: "react",
+          },
+        },
+      },
+    },
     htmlPlugin: false,
     rspack: {
       output: {
