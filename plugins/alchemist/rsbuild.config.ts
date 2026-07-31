@@ -29,16 +29,6 @@ export default defineConfig({
     minify: true,
   },
   tools: {
-    swc: {
-      jsc: {
-        transform: {
-          react: {
-            runtime: "automatic",
-            importSource: "react",
-          },
-        },
-      },
-    },
     rspack(config) {
       applyAlchemistRspackDefaults(config);
     },

@@ -1,9 +1,9 @@
 {
   "name": "@molcrafts/molvis-plugin-alchemist",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
-  "description": "Alchemist — a canvas chemistry merge game: MolVis page plugin with static-site deployment",
+  "description": "Alchemist \u2014 a canvas chemistry merge game: MolVis page plugin with static-site deployment",
   "license": "BSD-3-Clause",
   "repository": {
     "type": "git",
@@ -34,12 +34,13 @@
     "prepublishOnly": "npm run check"
   },
   "devDependencies": {
-    "@rsbuild/core": "*",
+    "@rsbuild/core": "^2.1.9",
     "@rslib/core": "*",
     "@rspack/core": "*",
-    "@rstest/core": "*",
+    "@rstest/core": "^0.11.5",
     "@rstest/playwright": "*",
     "playwright": "*",
-    "typescript": "*"
+    "typescript": "^7.0.2",
+    "@rsbuild/plugin-react": "^2.1.0"
   }
 }
