@@ -1,0 +1,63 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)publish assets for"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - run: npm run check:contract
+      - run: npm run check:manifests
+      - run: npm run check:meta-version
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build
+      - run: npm run test:e2e
+      - run: node scripts/prepare-release-assets.mjs
+
+      - name: Create / update GitHub Release with flat plugin assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          # Ensure release exists
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          fi
+          # Upload each package directory as assets (prefix by package name for multi)
+          # Meta is the default install: assets at release root for meta.
+          if [ -d release-assets/meta ]; then
+            (
+              cd release-assets/meta
+              gh release upload "$TAG" ./* --clobber
+            )
+          fi
+          # Also attach per-plugin zips for single-plugin install
+          for dir in release-assets/*/; do
+            name=$(basename "$dir")
+            [ "$name" = "meta" ] && continue
+            zip -r "release-assets/${name}.zip" "$dir"
+            gh release upload "$TAG" "release-assets/${name}.zip" --clobber
+          done

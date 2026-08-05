@@ -35,5 +35,7 @@ playwright-report/
 test-results/
 rstest-report/
 
-# dist/ is committed so jsDelivr can serve the plugin from GitHub tags.
-# CI rebuilds and fails if committed dist/ is stale. See README Release.
+# Built artifacts — never commit. CI builds; GitHub Releases host packages.
+dist/
+plugins/*/dist/
+release-assets/

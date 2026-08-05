@@ -32,9 +32,13 @@ export { isInterruptError } from "./errors";
 const PYODIDE_JS = `${PYODIDE_INDEX_URL}pyodide.mjs`;
 const PYODIDE_LOCK = `${PYODIDE_INDEX_URL}pyodide-lock.json`;
 
-/** Assets co-located with plugin.js after `npm run copy:workers`. */
-function assetUrl(rel: string): string {
-  return new URL(rel, import.meta.url).href;
+/**
+ * Assets co-located with plugin.js (local `dist/` or GitHub Release root).
+ * Release assets are **flat** (`pypi-all.json`); local build uses the same
+ * flat names via `copy-kernel-workers.mjs`.
+ */
+function assetUrl(name: string): string {
+  return new URL(`./${name.replace(/^\.\//, "")}`, import.meta.url).href;
 }
 
 function workerUrl(name: "comlink.worker.js" | "coincident.worker.js"): URL {
@@ -259,8 +263,8 @@ export class HostKernel {
         location: "",
         sendMessage,
         pyodideUrl: PYODIDE_JS,
-        pipliteWheelUrl: assetUrl("./pypi/piplite-0.8.2-py3-none-any.whl"),
-        pipliteUrls: [assetUrl("./pypi/all.json")],
+        pipliteWheelUrl: assetUrl("piplite-0.8.2-py3-none-any.whl"),
+        pipliteUrls: [assetUrl("all.json")],
         disablePyPIFallback: false,
         mountDrive: false,
         loadPyodideOptions: {

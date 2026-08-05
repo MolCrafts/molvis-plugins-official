@@ -48,6 +48,7 @@
     "serve:carbon-tube": "node scripts/dev-serve.mjs carbon-tube",
     "preview": "npm run build && npx --yes serve -l 4173 --cors .",
     "preview:pyodide": "npm run build -w @molcrafts/molvis-plugin-pyodide-molpy && npx --yes serve -l 4174 --cors plugins/pyodide-molpy",
+    "prepare:release": "node scripts/prepare-release-assets.mjs",
     "check:contract": "node scripts/check-vendored-contract.mjs && npm run check:contract -w @molcrafts/molvis-plugin-lammps-input-generator && npm run check:contract -w @molcrafts/molvis-plugin-alchemist && npm run check:contract -w @molcrafts/molvis-plugin-pyodide-molpy && npm run check:contract -w @molcrafts/molvis-plugin-carbon-tube-builder"
   },
   "peerDependencies": {

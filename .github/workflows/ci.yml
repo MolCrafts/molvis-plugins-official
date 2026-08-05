@@ -14,34 +14,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      # No package-lock — fresh resolve each run (lockfiles are gitignored).
       - run: npm install
       - run: npx playwright install --with-deps chromium
       - run: npm run check:contract
-      # Per-package only: molvis.plugin.json version == that package's package.json.
       - run: npm run check:manifests
-      # Meta MAJOR.MINOR.PATCH: major=system, minor=plugin count, patch=fixes.
       - run: npm run check:meta-version
       - run: npm run typecheck
       - run: npm run test
       - run: npm run build
       - run: npm run test:e2e
-      # dist/ is committed for jsDelivr (`gh/…@tag/…`). Build above must match git.
-      - name: Ensure committed dist is up to date
-        run: |
-          git add -f dist plugins/*/dist
-          if ! git diff --cached --quiet; then
-            echo "::error::dist/ is stale. Run npm run build and commit dist/ (and plugins/*/dist)."
-            git diff --cached --stat
-            exit 1
-          fi
-          echo "dist/ matches this build (jsDelivr-ready)."
-      - name: Upload dist artifacts
-        if: always()
+      - run: node scripts/prepare-release-assets.mjs
+      - name: Upload release-assets (CI artifact; not committed)
         uses: actions/upload-artifact@v4
         with:
-          name: plugin-dist
-          path: |
-            dist/
-            plugins/*/dist/
-          if-no-files-found: warn
+          name: plugin-release-assets
+          path: release-assets/
+          if-no-files-found: error

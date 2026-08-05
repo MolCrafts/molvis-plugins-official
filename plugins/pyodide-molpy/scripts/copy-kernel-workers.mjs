@@ -21,7 +21,6 @@ const libDir = path.join(pkgRoot, "lib");
 const pypiDir = path.join(pkgRoot, "pypi");
 
 fs.mkdirSync(dist, { recursive: true });
-fs.mkdirSync(path.join(dist, "pypi"), { recursive: true });
 
 for (const name of ["comlink.worker.js", "coincident.worker.js"]) {
   const src = path.join(libDir, name);
@@ -36,8 +35,9 @@ for (const name of ["comlink.worker.js", "coincident.worker.js"]) {
   console.log(`[copy-kernel-workers] ${name} → dist/`);
 }
 
+// Flat names so GitHub Release assets + local HTTP share one layout.
 for (const name of fs.readdirSync(pypiDir)) {
   if (!name.endsWith(".whl") && name !== "all.json") continue;
-  fs.copyFileSync(path.join(pypiDir, name), path.join(dist, "pypi", name));
-  console.log(`[copy-kernel-workers] pypi/${name} → dist/pypi/`);
+  fs.copyFileSync(path.join(pypiDir, name), path.join(dist, name));
+  console.log(`[copy-kernel-workers] ${name} → dist/ (flat)`);
 }
