@@ -17,8 +17,9 @@ function rampNptConfig(): LammpsEqConfig {
       forceField: {
         pairStyle: "eam/alloy",
         pairCoeff: "* * Cu.eam.alloy Cu",
-        extraLines: "neighbor_modify delay 0",
-        includeCommentedStubs: false,
+        lines: [
+          { id: "ff-x", kind: "custom", text: "neighbor_modify delay 0" },
+        ],
       },
     },
     minimize: {

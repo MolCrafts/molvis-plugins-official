@@ -10,7 +10,7 @@ export function sortTempPoints(points: TempControlPoint[]): TempControlPoint[] {
 }
 
 /**
- * Piecewise-linear T schedule for molplot: one vertex per 调温点.
+ * Piecewise-linear T schedule for molplot: one vertex per control point.
  */
 export function tempPointsToSchedulePoints(
   points: TempControlPoint[],
@@ -44,6 +44,7 @@ export function tempPointsToStages(points: TempControlPoint[]): EqStage[] {
       pStop: cur.pStop,
       tdamp: cur.tdamp,
       pdamp: cur.pdamp,
+      langevinSeed: cur.langevinSeed,
     });
   }
   return stages;

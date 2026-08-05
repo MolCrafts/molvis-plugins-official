@@ -17,8 +17,14 @@ function holdNvtConfig(): LammpsEqConfig {
       forceField: {
         pairStyle: "lj/cut/coul/long 12.0",
         pairCoeff: "* * 0.1 3.5",
-        extraLines: "",
-        includeCommentedStubs: true,
+        lines: [
+          { id: "ff-1", kind: "bond_style", text: "bond_style     harmonic" },
+          {
+            id: "ff-2",
+            kind: "kspace_style",
+            text: "kspace_style   pppm 1.0e-4",
+          },
+        ],
       },
     },
     minimize: null,
@@ -49,7 +55,7 @@ function holdNvtConfig(): LammpsEqConfig {
 }
 
 describe("generateLammpsEqInput hold NVT", () => {
-  it("emits units, read_data, FF placeholders, and nvt fix from 调温点", () => {
+  it("emits units, read_data, FF placeholders, and nvt fix from temperature points", () => {
     const script = generateLammpsEqInput(holdNvtConfig());
     expect(script).toContain("units           real");
     expect(script).toContain("read_data       data.lmp");
@@ -58,8 +64,11 @@ describe("generateLammpsEqInput hold NVT", () => {
     );
     expect(script).toContain("pair_style      lj/cut/coul/long 12.0");
     expect(script).toContain("pair_coeff      * * 0.1 3.5");
-    expect(script).toContain("# bond_style     harmonic");
-    expect(script).toContain("# kspace_style   pppm 1.0e-4");
+    expect(script).toContain("# --- force-field lines ---");
+    expect(script).toContain("bond_style     harmonic");
+    expect(script).toContain("kspace_style   pppm 1.0e-4");
+    expect(script).toContain("neighbor        2 bin");
+    expect(script).toContain("thermo          1000");
     expect(script).toContain("# --- eq stage 1: NVT hold ---");
     expect(script).toContain(
       "fix             1 all nvt temp 300 300 100",

@@ -16,7 +16,7 @@ function easeOutCubic(t: number): number {
 }
 
 /**
- * molplot LineChart driven by 调温点.
+ * molplot LineChart driven by temperature control points.
  *
  * - Curve series updates with a short tween animation when points change.
  * - Optional playhead (`cursor` series) walks the polyline once when

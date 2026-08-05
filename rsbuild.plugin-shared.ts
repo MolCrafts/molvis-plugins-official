@@ -7,20 +7,9 @@
  */
 import type { RsbuildConfig } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
+import { pluginExternals } from "./plugin-externals";
 
-export const pluginExternals = {
-  react: "react",
-  "react-dom": "react-dom",
-  "react-dom/client": "react-dom/client",
-  "react/jsx-runtime": "react/jsx-runtime",
-  "react/jsx-dev-runtime": "react/jsx-dev-runtime",
-  "@molcrafts/molvis-core": "@molcrafts/molvis-core",
-  "@molvis/core": "@molvis/core",
-  "@molcrafts/molrs": "@molcrafts/molrs",
-  "@molcrafts/molplot": "@molcrafts/molplot",
-  "@molvis/stage": "@molvis/stage",
-  "@molcrafts/molvis-stage": "@molcrafts/molvis-stage",
-} as const;
+export { pluginExternals };
 
 export function createPluginRsbuildConfig(
   options: {
@@ -29,6 +18,8 @@ export function createPluginRsbuildConfig(
   } = {},
 ): RsbuildConfig {
   const { injectStyles = false, extraExternals = {} } = options;
+  // Faster watch rebuilds for `npm run dev` / `npm run serve`.
+  const isDev = process.env.MOLVIS_PLUGIN_DEV === "1";
   return {
     plugins: [
       pluginReact({
@@ -52,9 +43,9 @@ export function createPluginRsbuildConfig(
       filename: {
         js: "plugin.js",
       },
-      minify: true,
-      sourceMap: false,
-      cleanDistPath: true,
+      minify: !isDev,
+      sourceMap: isDev ? "cheap-module-source-map" : false,
+      cleanDistPath: !isDev,
       injectStyles,
     },
     html: {

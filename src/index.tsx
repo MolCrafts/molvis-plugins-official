@@ -6,37 +6,31 @@
  * (duplicate toolbar buttons / commands).
  */
 
-import { registerLammpsEqInput } from "../plugins/lammps-input-generator/src/index";
-import { disposeWizardHost } from "../plugins/lammps-input-generator/src/commands/open-wizard/register";
 import alchemistPlugin from "../plugins/alchemist/src/index";
+import { registerCarbonTubeBuilder } from "../plugins/carbon-tube-builder/src/index";
+import { registerLammpsEqInput } from "../plugins/lammps-input-generator/src/index";
 import { registerPyodideMolpy } from "../plugins/pyodide-molpy/src/index";
-import type {
-  MolvisPluginModule,
-  PluginAPI,
-} from "../plugins/lammps-input-generator/src/types/plugin-api";
+import type { MolvisPluginModule, PluginAPI } from "./types/plugin-api";
+import { PLUGIN_ID, PLUGIN_VERSION } from "./version";
 
 const plugin: MolvisPluginModule = {
-  id: "com.molcrafts.plugins-official",
+  id: PLUGIN_ID,
   name: "MolVis Plugins Official",
-  version: "0.1.0",
+  version: PLUGIN_VERSION,
 
   activate(api: PluginAPI) {
     api.log.info("plugins-official meta activate");
     registerLammpsEqInput(api);
+    registerCarbonTubeBuilder(api);
     alchemistPlugin.activate(api);
-    // Optional host surfaces (dialogs/panels/mode tabs) — requires molvis page
-    // with PluginAPI extensions. Fail soft if an older host omits them.
-    if (api.dialogs && api.panels && api.modes) {
-      registerPyodideMolpy(api);
-    } else {
-      api.log.warn(
-        "pyodide-molpy skipped: host PluginAPI missing dialogs/panels",
-      );
-    }
+    // Every child registers unconditionally. The contract is vendored from
+    // one source now, so probing `api.dialogs && api.panels` at runtime would
+    // only hide a genuine host/plugin mismatch behind a silently missing
+    // feature — which is how pyodide-molpy could disappear with one warn().
+    registerPyodideMolpy(api);
   },
 
   deactivate(api: PluginAPI) {
-    disposeWizardHost();
     alchemistPlugin.deactivate?.(api);
     api.log.info("plugins-official meta deactivate");
   },

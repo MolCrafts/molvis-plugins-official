@@ -1,5 +1,6 @@
 import type { OutputConfig } from "../../model/types";
 import { css } from "../styles";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export function OutputStep({
   value,
@@ -16,13 +17,12 @@ export function OutputStep({
     <div>
       <section style={css.section}>
         <label style={css.checkRow}>
-          <input
-            type="checkbox"
+          <Checkbox
             checked={dumpOn}
-            onChange={(e) =>
+            onCheckedChange={(checked) =>
               onChange({
                 ...value,
-                dump: e.target.checked
+                dump: checked === true
                   ? {
                       every: 1000,
                       path: "dump.eq.lammpstrj",
@@ -82,13 +82,12 @@ export function OutputStep({
 
       <section style={css.section}>
         <label style={css.checkRow}>
-          <input
-            type="checkbox"
+          <Checkbox
             checked={restartOn}
-            onChange={(e) =>
+            onCheckedChange={(checked) =>
               onChange({
                 ...value,
-                restart: e.target.checked
+                restart: checked === true
                   ? { every: 10_000, path: "restart.eq" }
                   : null,
               })
@@ -134,13 +133,12 @@ export function OutputStep({
 
       <section style={css.section}>
         <label style={css.checkRow}>
-          <input
-            type="checkbox"
+          <Checkbox
             checked={writeOn}
-            onChange={(e) =>
+            onCheckedChange={(checked) =>
               onChange({
                 ...value,
-                writeData: e.target.checked ? "data.eq.lmp" : null,
+                writeData: checked === true ? "data.eq.lmp" : null,
               })
             }
           />

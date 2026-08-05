@@ -1,17 +1,17 @@
 {
   "name": "@molcrafts/molvis-plugin-alchemist",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Alchemist \u2014 a canvas chemistry merge game: MolVis page plugin with static-site deployment",
   "license": "BSD-3-Clause",
   "repository": {
     "type": "git",
-    "url": "https://github.com/MolCrafts/molvis-plugin-template.git"
+    "url": "https://github.com/MolCrafts/molvis-plugins-official.git"
   },
-  "homepage": "https://github.com/MolCrafts/molvis-plugin-template",
+  "homepage": "https://github.com/MolCrafts/molvis-plugins-official",
   "bugs": {
-    "url": "https://github.com/MolCrafts/molvis-plugin-template/issues"
+    "url": "https://github.com/MolCrafts/molvis-plugins-official/issues"
   },
   "keywords": [
     "alchemist",
@@ -31,16 +31,25 @@
     "test:e2e": "rstest run --config rstest.e2e.config.ts",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm run test && npm run build && npm run test:e2e",
-    "prepublishOnly": "npm run check"
+    "prepublishOnly": "npm run check",
+    "check:contract": "node scripts/check-vendored-contract.mjs"
   },
   "devDependencies": {
     "@rsbuild/core": "^2.1.9",
+    "@rsbuild/plugin-react": "^2.1.0",
     "@rslib/core": "*",
     "@rspack/core": "*",
     "@rstest/core": "^0.11.5",
     "@rstest/playwright": "*",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "playwright": "*",
-    "typescript": "^7.0.2",
-    "@rsbuild/plugin-react": "^2.1.0"
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "typescript": "^7.0.2"
+  },
+  "peerDependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   }
 }

@@ -1,3 +1,5 @@
+import { Button } from "@/components/ui/button";
+import { Clipboard, Download } from "lucide-react";
 import { css } from "../styles";
 
 export function PreviewStep({
@@ -11,17 +13,13 @@ export function PreviewStep({
 }) {
   return (
     <div>
-      <p style={css.hint}>
-        Review the generated input. Force-field lines are placeholders —
-        adjust pair_coeff (and uncomment stubs) before production runs.
-      </p>
-      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-        <button type="button" style={css.btn("primary")} onClick={onCopy}>
-          Copy
-        </button>
-        <button type="button" style={css.btn("ghost")} onClick={onDownload}>
-          Download in.eq
-        </button>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 4, marginBottom: 6 }}>
+        <Button type="button" variant="ghost" size="icon-sm" onClick={onCopy} aria-label="Copy script" title="Copy script">
+          <Clipboard />
+        </Button>
+        <Button type="button" variant="ghost" size="icon-sm" onClick={onDownload} aria-label="Download in.eq" title="Download in.eq">
+          <Download />
+        </Button>
       </div>
       <pre style={css.pre}>{script}</pre>
     </div>

@@ -1,37 +1,41 @@
 import { expect, test } from "@rstest/core";
 import plugin from "./index";
-import type { PluginCommandFn, PluginAPI } from "./types/plugin-api";
+import { fakePluginAPI, mapStorage } from "./types/contract_testing";
+import type { PluginDialogSpec } from "./types/plugin-api";
+import { COMMANDS, DIALOG_ID, PLUGIN_ID } from "./version";
 
-test("registers the Alchemist toolbar command", () => {
+test("registers the Alchemist dialog and a palette command that opens it", () => {
   let registeredName = "";
-  let registeredCommand: PluginCommandFn | null = null;
   let registeredLabel = "";
-  const storage = new Map<string, string>();
-  const api: PluginAPI = {
+  let opensDialog: string | undefined;
+  const dialogs: PluginDialogSpec[] = [];
+
+  const api = fakePluginAPI({
     pluginId: plugin.id,
-    log: {
-      info() {},
-      warn() {},
-      error() {},
-    },
-    storage: {
-      getItem: (key) => storage.get(key) ?? null,
-      setItem: (key, value) => storage.set(key, value),
-      removeItem: (key) => storage.delete(key),
-    },
+    storage: mapStorage(new Map<string, string>()),
     commands: {
-      register(name, command, options) {
+      register(name, _command, options) {
         registeredName = name;
-        registeredCommand = command as PluginCommandFn;
         registeredLabel = options?.toolbar?.label ?? "";
+        opensDialog = options?.toolbar?.opensDialog;
       },
     },
-  };
+    dialogs: {
+      register(spec) {
+        dialogs.push(spec);
+      },
+    },
+  });
 
   plugin.activate(api);
 
-  expect(plugin.id).toBe("com.molcrafts.alchemist");
-  expect(registeredName).toBe("alchemist.open");
+  expect(plugin.id).toBe(PLUGIN_ID);
+  expect(registeredName).toBe(COMMANDS.open);
   expect(registeredLabel).toBe("Alchemist");
-  expect(registeredCommand).not.toBeNull();
+  // The command points at the host-owned dialog rather than mounting its own
+  // scrim + focus trap, which is what this plugin used to do.
+  expect(opensDialog).toBe(DIALOG_ID);
+  expect(dialogs).toHaveLength(1);
+  expect(dialogs[0].id).toBe(DIALOG_ID);
+  expect(dialogs[0].size).toBe("lg");
 });

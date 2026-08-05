@@ -1,34 +1,86 @@
+import { PYODIDE_INDEX_URL } from "../cdn";
 /**
- * Shared Pyodide kernel for notebook cells + script dialog.
+ * Pyodide kernel — thin host only.
  *
- * Injects ``molvis`` with InProcess bridge so::
+ * Viewer control lives in **molvis-python**:
+ *   ``InProcessTransport`` + ``Stage.from_inprocess`` → same RPC catalog as WS.
  *
- *     import molvis as mv
- *     mv.run("camera.py")
- *     stage.camera.set_pose(alpha=1.2)
- *
- * talks to the live Molvis app (not a print stub).
+ * This file only:
+ *   1. loads Pyodide
+ *   2. registers ``molvis_rpc.call`` → {@link createRpcClient} → RPCRouter
+ *   3. runs a short Python bootstrap that imports molvis (not a TS string API)
+ *   4. executes notebook / script cells as plain Python (shared __main__)
  */
 
-import type { HostBridge } from "../bridge/host_bridge";
+import { createRpcClient, type RpcClient } from "../rpc/client";
+import { installRuntimePackages } from "./install_runtime";
 import type {
   KernelListener,
   KernelLogLine,
   KernelStatus,
+  MimeBundle,
   RunResult,
   RunSource,
 } from "./types";
 
-// Pyodide 314.x ships CPython 3.14 — matches molcrafts-molrs pyemscripten wheels.
-const PYODIDE_INDEX = "https://cdn.jsdelivr.net/pyodide/v314.0.3/full/";
+type CellRunPayload = {
+  result: MimeBundle | null;
+  displays: MimeBundle[];
+};
+
+function parseCellPayload(raw: unknown): CellRunPayload {
+  if (raw == null) return { result: null, displays: [] };
+  let obj: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      obj = JSON.parse(raw);
+    } catch {
+      return { result: null, displays: [] };
+    }
+  } else if (typeof raw === "object" && raw !== null) {
+    // PyProxy / Map from Pyodide
+    const proxy = raw as {
+      toJs?: (opts?: Record<string, unknown>) => unknown;
+    };
+    if (typeof proxy.toJs === "function") {
+      obj = proxy.toJs({
+        dict_converter: Object.fromEntries,
+        create_pyproxies: false,
+      });
+    }
+  }
+  if (!obj || typeof obj !== "object") {
+    return { result: null, displays: [] };
+  }
+  const rec = obj as { result?: MimeBundle | null; displays?: MimeBundle[] };
+  const result =
+    rec.result && typeof rec.result === "object" ? rec.result : null;
+  const displays = Array.isArray(rec.displays)
+    ? rec.displays.filter((d) => d && typeof d === "object")
+    : [];
+  return { result, displays };
+}
+
+const PYODIDE_INDEX = PYODIDE_INDEX_URL;
 
 type PyodideLike = {
   runPythonAsync: (code: string) => Promise<unknown>;
+  /** Sync entry — usable from a click handler while a cell is mid-await. */
+  runPython?: (code: string) => unknown;
   setStdout: (opts: { batched: (s: string) => void }) => void;
   setStderr: (opts: { batched: (s: string) => void }) => void;
   loadPackage: (name: string | string[]) => Promise<void>;
   registerJsModule: (name: string, mod: Record<string, unknown>) => void;
+  pyimport: (name: string) => unknown;
+  setInterruptBuffer?: (buffer: TypedArray) => void;
+  checkInterrupt?: () => void;
+  FS: {
+    writeFile: (path: string, data: string | Uint8Array) => void;
+    mkdirTree?: (path: string) => void;
+  };
 };
+
+type TypedArray = Uint8Array | Int32Array;
 
 async function loadPyodideFromCdn(): Promise<PyodideLike> {
   const url = `${PYODIDE_INDEX}pyodide.mjs`;
@@ -43,94 +95,35 @@ async function loadPyodideFromCdn(): Promise<PyodideLike> {
   return loadPyodide({ indexURL: PYODIDE_INDEX });
 }
 
+/**
+ * Minimal glue: expose JS RPC + import molvis-python (InProcessTransport).
+ * molvis + molpy are hard requirements — no stubs, no polyfills.
+ * Viewer API: commands are methods on the stage — `stage.draw(...)`.
+ */
+/**
+ * Jupyter-compatible notebook cell runner (in-process Pyodide).
+ *
+ * Behaviour mirrors IPython InteractiveShell for the pieces we host:
+ *   - shared __main__ namespace across cells (including user _names)
+ *   - last expression auto-display via DisplayFormatter protocol
+ *   - display() publishes display_data mid-cell
+ *   - _ holds the last result
+ *
+ * Wire format for run_user_cell: JSON
+ *   {"result": mimebundle|null, "displays": [mimebundle, ...]}
+ */
 const BOOTSTRAP_PY = `
 import sys
-import types
-import math
-# Script library map: name -> source (synced from JS)
+import json
+import base64
+import ast as _ast
+
+import molpy as mp  # hard requirement — do not stub
+from molvis_rpc import call as _rpc_call
+import molvis as mv
+
+# ── Script library (plugin-local) ─────────────────────────────────────
 _MOLVIS_SCRIPTS = dict(globals().get("_MOLVIS_SCRIPTS") or {})
-
-# Host bridge registered as JS module "molvis_host"
-from molvis_host import call as _host_call
-
-def _bridge(method, params=None):
-    p = params or {}
-    # pyodide: plain dict → JS object
-    return _host_call(method, p)
-
-class Camera:
-    """Camera control — InProcess RPC to the live viewer."""
-    def __init__(self, stage):
-        self._stage = stage
-
-    def get_pose(self):
-        return _bridge("camera.get_pose", {})
-
-    def set_pose(self, *, alpha=None, beta=None, radius=None, target=None):
-        params = {}
-        if alpha is not None:
-            params["alpha"] = float(alpha)
-        if beta is not None:
-            params["beta"] = float(beta)
-        if radius is not None:
-            params["radius"] = float(radius)
-        if target is not None:
-            params["target"] = [float(v) for v in target]
-        result = _bridge("camera.set_pose", params)
-        return result.get("pose") if hasattr(result, "get") else getattr(result, "pose", result)
-
-    def fit(self):
-        """Alias for fit_view (molpy-style short name)."""
-        return self.fit_view()
-
-    def fit_view(self):
-        result = _bridge("camera.fit_view", {})
-        return result.get("pose") if hasattr(result, "get") else getattr(result, "pose", result)
-
-    def look_at(self, position, target, up=None):
-        params = {
-            "position": [float(v) for v in position],
-            "target": [float(v) for v in target],
-        }
-        if up is not None:
-            params["up"] = [float(v) for v in up]
-        result = _bridge("camera.look_at", params)
-        return result.get("pose") if hasattr(result, "get") else getattr(result, "pose", result)
-
-class Stage:
-    """Browser Stage — same public name as CPython mv.Stage."""
-    def __init__(self, name="default"):
-        self.name = name
-        self._camera = Camera(self)
-        self._mode = "python"
-
-    def draw(self, obj):
-        # Full Frame draw needs molpy + binary path; keep explicit for now.
-        print("[stage.draw] not yet bridged — use host file open / CPython Stage")
-        return self
-
-    @property
-    def camera(self):
-        return self._camera
-
-    @property
-    def mode(self):
-        return self._mode
-
-    @property
-    def selection(self):
-        return _SelectionStub()
-
-    def run(self, script):
-        return run(script)
-
-class _SelectionStub:
-    def frame(self):
-        return None
-    def set_atoms(self, ids):
-        print("[stage.selection.set_atoms] not yet bridged", list(ids))
-    def clear(self):
-        print("[stage.selection.clear] not yet bridged")
 
 def _normalize_script_name(name):
     s = str(name).strip().lstrip("/")
@@ -138,41 +131,312 @@ def _normalize_script_name(name):
         raise ValueError("empty script name")
     return s if s.endswith(".py") else s + ".py"
 
-def run(script, /, **_kwargs):
-    """Execute a named script from the MolVis script library.
+# ── Wire molvis-python → page RPCRouter (catalog methods) ─────────────
+# name="default" so mv.Stage() returns this same in-process stage.
+stage = mv.Stage.from_inprocess(_rpc_call, name="default", gui=True)
 
-    >>> import molvis as mv
-    >>> mv.run("camera.py")
-    """
+def run_script(script, /, **_kwargs):
     key = _normalize_script_name(script)
     source = _MOLVIS_SCRIPTS.get(key)
     if source is None:
         known = ", ".join(sorted(_MOLVIS_SCRIPTS)) or "(none)"
-        raise FileNotFoundError(
-            f"script not found: {key!r}. Known: {known}"
-        )
+        raise FileNotFoundError("script not found: %r. Known: %s" % (key, known))
     g = {
-        "__name__": f"__molvis_script__:{key}",
+        "__name__": "__molvis_script__:%s" % key,
         "__file__": key,
-        "mv": sys.modules.get("molvis"),
+        "mv": mv,
+        "mp": mp,
         "stage": stage,
-        "math": math,
+        "molvis": mv,
+        "molpy": mp,
+        "math": __import__("math"),
     }
     exec(compile(source, key, "exec"), g)
-    return None
 
 def list_scripts():
     return sorted(_MOLVIS_SCRIPTS.keys())
 
-_mod = types.ModuleType("molvis")
-_mod.Stage = Stage
-_mod.run = run
-_mod.list_scripts = list_scripts
-_mod.__version__ = "0.0.0+pyodide"
-sys.modules["molvis"] = _mod
+mv.run = run_script
+mv.list_scripts = list_scripts
 
-stage = Stage()
-_mod._default_stage = stage
+import __main__ as _MAIN
+
+# ── Jupyter DisplayFormatter protocol ─────────────────────────────────
+# Priority matches IPython.core.formatters.DisplayFormatter defaults.
+_MIME_METHODS = (
+    ("text/html", "_repr_html_"),
+    ("text/markdown", "_repr_markdown_"),
+    ("image/svg+xml", "_repr_svg_"),
+    ("image/png", "_repr_png_"),
+    ("image/jpeg", "_repr_jpeg_"),
+    ("text/latex", "_repr_latex_"),
+    ("application/json", "_repr_json_"),
+    ("application/javascript", "_repr_javascript_"),
+)
+_IMAGE_MIMES = frozenset({"image/png", "image/jpeg", "image/gif"})
+
+_DISPLAY_PUB = []  # mid-cell display() payloads for the current run
+
+
+def _mime_encode(mime, value):
+    """Normalize a formatter return value to a JSON-safe string."""
+    if value is None:
+        return None
+    if mime in _IMAGE_MIMES:
+        if isinstance(value, (bytes, bytearray, memoryview)):
+            return base64.b64encode(bytes(value)).decode("ascii")
+        # already base64 / data-url from some libraries
+        return str(value)
+    if mime == "application/json" and not isinstance(value, str):
+        return json.dumps(value)
+    if isinstance(value, str):
+        return value
+    return str(value)
+
+
+def format_mimebundle(obj, include=None, exclude=None):
+    """Build a Jupyter mimebundle for *obj* (DisplayFormatter protocol).
+
+    Order:
+      1. obj._repr_mimebundle_(include=…, exclude=…) when present
+      2. per-type _repr_*_ methods
+      3. always text/plain via repr(obj) when nothing richer produced it
+    """
+    if obj is None:
+        return None
+
+    data = {}
+    mime_fn = getattr(obj, "_repr_mimebundle_", None)
+    if callable(mime_fn):
+        try:
+            try:
+                bundle = mime_fn(include=include, exclude=exclude)
+            except TypeError:
+                bundle = mime_fn()
+            if isinstance(bundle, tuple):
+                bundle = bundle[0]  # (data, metadata)
+            if isinstance(bundle, dict):
+                for k, v in bundle.items():
+                    enc = _mime_encode(str(k), v)
+                    if enc is not None:
+                        data[str(k)] = enc
+        except Exception:
+            data = {}
+
+    if not data:
+        for mime, method in _MIME_METHODS:
+            if include is not None and mime not in include:
+                continue
+            if exclude is not None and mime in exclude:
+                continue
+            fn = getattr(obj, method, None)
+            if not callable(fn):
+                continue
+            try:
+                val = fn()
+            except Exception:
+                continue
+            enc = _mime_encode(mime, val)
+            if enc is not None:
+                data[mime] = enc
+
+    if "text/plain" not in data:
+        try:
+            data["text/plain"] = repr(obj)
+        except Exception:
+            data["text/plain"] = "<%s>" % type(obj).__name__
+
+    if include is not None:
+        keep = set(include)
+        data = {k: v for k, v in data.items() if k in keep}
+    if exclude is not None:
+        drop = set(exclude)
+        data = {k: v for k, v in data.items() if k not in drop}
+    return data or None
+
+
+def display(*objs, include=None, exclude=None, **_kwargs):
+    """IPython.display.display — publish one mimebundle per object."""
+    for obj in objs:
+        bundle = format_mimebundle(obj, include=include, exclude=exclude)
+        if bundle is not None:
+            _DISPLAY_PUB.append(bundle)
+
+
+def _seed_user_ns():
+    """Shared notebook namespace = __main__ (cells share variables)."""
+    ns = dict(_MAIN.__dict__)
+    ns.update({
+        "mv": mv,
+        "mp": mp,
+        "stage": stage,
+        "molvis": mv,
+        "molpy": mp,
+        "math": __import__("math"),
+        "sys": sys,
+        "display": display,
+    })
+    return ns
+
+
+def _write_user_ns(ns):
+    """Persist cell bindings onto __main__ for the next cell.
+
+    Jupyter keeps user names including single-underscore ones (_el, _).
+    Only skip dunder protocol attrs (__name__, __builtins__, …).
+    """
+    for k, v in ns.items():
+        if not isinstance(k, str):
+            continue
+        if k.startswith("__") and k.endswith("__"):
+            continue
+        _MAIN.__dict__[k] = v
+
+
+async def _await_if_needed(value):
+    if hasattr(value, "__await__") or callable(getattr(value, "then", None)):
+        return await value
+    return value
+
+
+async def _exec_body(body, ns, flags):
+    if not body:
+        return
+    mod = _ast.Module(body=list(body), type_ignores=[])
+    code = compile(mod, "<cell>", "exec", flags=flags)
+    await _await_if_needed(eval(code, ns, ns))
+
+
+async def run_user_cell(source):
+    """Run one notebook cell; return JSON {result, displays}.
+
+    Last top-level expression is evaluated and formatted (IPython style).
+    Statements alone produce no execute_result.
+
+    Cells starting with \`\`%%mv.demo\`\` run statement-at-a-time via
+    :func:\`molvis.demo.run_demo\` (inter-step delay from \`\`delay=\`\`).
+    """
+    _DISPLAY_PUB.clear()
+    ns = _seed_user_ns()
+    flags = _ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
+    raw = source if source is not None else ""
+
+    # ── %%mv.demo magic: step through top-level statements ───────────
+    body_src, delay = mv.strip_demo_magic(raw)
+    if delay is not None:
+        await mv.demo(body_src, ns, delay=delay)
+        _write_user_ns(ns)
+        return json.dumps({"result": None, "displays": list(_DISPLAY_PUB)})
+
+    tree = _ast.parse(body_src, "<cell>", "exec")
+    body = tree.body
+    result_bundle = None
+
+    if not body:
+        _write_user_ns(ns)
+        return json.dumps({"result": None, "displays": []})
+
+    last = body[-1]
+    if isinstance(last, _ast.Expr):
+        await _exec_body(body[:-1], ns, flags)
+        expr = _ast.Expression(body=last.value)
+        code = compile(expr, "<cell>", "eval", flags=flags)
+        value = await _await_if_needed(eval(code, ns, ns))
+        # IPython: _ is the last result (including None).
+        ns["_"] = value
+        if value is not None:
+            result_bundle = format_mimebundle(value)
+    else:
+        await _exec_body(body, ns, flags)
+
+    _write_user_ns(ns)
+    return json.dumps({
+        "result": result_bundle,
+        "displays": list(_DISPLAY_PUB),
+    })
+
+
+_MOLVIS_CURRENT_CELL_TASK = None
+_MOLVIS_INTERRUPT = False
+
+
+def _stop_background_stage_work():
+    """Best-effort: stop non-blocking camera orbits (and similar) on interrupt."""
+    try:
+        stage.camera.stop_track()
+    except Exception:
+        pass
+
+
+def cancel_user_cell():
+    """Cancel the active cell task + stop background stage work.
+
+    Invoked from JS on the Interrupt button (must be sync and re-entrant —
+    never schedule a second runPythonAsync while the cell is running).
+    """
+    global _MOLVIS_INTERRUPT, _MOLVIS_CURRENT_CELL_TASK
+    _MOLVIS_INTERRUPT = True
+    _stop_background_stage_work()
+    task = _MOLVIS_CURRENT_CELL_TASK
+    if task is None or task.done():
+        return False
+    task.cancel("Interrupted by user")
+    return True
+
+
+def _clear_interrupt_flag():
+    global _MOLVIS_INTERRUPT
+    _MOLVIS_INTERRUPT = False
+
+
+def _soft_sigint(_signum, _frame):
+    """Map SIGINT to asyncio cancel — never raise KeyboardInterrupt into webloop.
+
+    Writing 2 into Pyodide's interrupt buffer raises KeyboardInterrupt at random
+    event-loop callbacks (webloop.run_handle / call_later), which shows up as
+    uncaught PythonError spam. Cancelling the cell task is enough for demo /
+    await cells on the main thread.
+    """
+    cancel_user_cell()
+
+
+try:
+    import signal as _signal
+
+    _signal.signal(_signal.SIGINT, _soft_sigint)
+except Exception:
+    pass
+
+
+async def run_user_cell_task(source):
+    """Track the active cell so the UI can cancel it without a global signal."""
+    global _MOLVIS_CURRENT_CELL_TASK
+    import asyncio as _asyncio
+
+    _clear_interrupt_flag()
+    _MOLVIS_CURRENT_CELL_TASK = _asyncio.current_task()
+    try:
+        return await run_user_cell(source)
+    except _asyncio.CancelledError:
+        raise
+    except KeyboardInterrupt as exc:
+        # If SIGINT still leaked into the cell task, rethrow as cancel.
+        raise _asyncio.CancelledError("Interrupted by user") from exc
+    finally:
+        _MOLVIS_CURRENT_CELL_TASK = None
+        _clear_interrupt_flag()
+
+
+# Register a JS-callable cancel hook so Interrupt does not need a second
+# runPythonAsync (which is serialized behind the active cell).
+try:
+    import molvis_kernel_ctl
+
+    molvis_kernel_ctl.register_cancel(cancel_user_cell)
+except Exception as _reg_err:
+    print("molvis_kernel_ctl.register_cancel failed:", _reg_err)
+
+
 `;
 
 export class PyodideKernel {
@@ -184,17 +448,60 @@ export class PyodideKernel {
   private runLock = false;
   private lastError: string | null = null;
   private scripts: Record<string, string> = {};
-  private bridge: HostBridge | null = null;
+  private rpc: RpcClient | null = null;
+  private interruptBuffer: Uint8Array | null = null;
+  /**
+   * Sync Python cancel_user_cell, registered during bootstrap.
+   * Called from the Interrupt button without a second runPythonAsync
+   * (which would sit behind the active cell on Pyodide's API lock).
+   */
+  private cellCancel: (() => boolean) | null = null;
 
-  /** Bind (or re-bind) the live Molvis app bridge before/after start. */
-  setBridge(bridge: HostBridge | null): void {
-    this.bridge = bridge;
-    if (this.pyodide && bridge) {
-      this.pyodide.registerJsModule("molvis_host", {
-        call: (method: string, params?: Record<string, unknown>) =>
-          bridge.call(method, params ?? {}),
-      });
+  /** Bind live app via RPCRouter (same catalog as WebSocket). */
+  setApp(app: unknown | null): void {
+    this.rpc = app ? createRpcClient(app) : null;
+    if (this.pyodide) this.registerHostModules();
+  }
+
+  /** @deprecated use setApp */
+  setBridge(bridge: { call: RpcClient["call"]; app?: unknown } | null): void {
+    if (!bridge) {
+      this.rpc = null;
+    } else if ("app" in bridge && bridge.app) {
+      this.rpc = createRpcClient(bridge.app);
+    } else {
+      // Legacy HostBridge-shaped object with .call only
+      this.rpc = {
+        app: null,
+        call: (method, params) =>
+          Promise.resolve(bridge.call(method, params ?? {})),
+      };
     }
+    if (this.pyodide) this.registerHostModules();
+  }
+
+  private registerHostModules(): void {
+    if (!this.pyodide) return;
+    this.pyodide.registerJsModule("molvis_rpc", {
+      call: (method: string, params?: Record<string, unknown>) => {
+        if (!this.rpc) {
+          return Promise.reject(
+            new Error("molvis RPC client not bound (app not ready)"),
+          );
+        }
+        return this.rpc.call(method, params ?? {});
+      },
+    });
+    // Kernel control surface: Python bootstrap registers cancel_user_cell here.
+    this.pyodide.registerJsModule("molvis_kernel_ctl", {
+      register_cancel: (fn: unknown) => {
+        this.cellCancel = () => invokePyCancel(fn);
+      },
+    });
+  }
+
+  private clearInterruptSignal(): void {
+    if (this.interruptBuffer) this.interruptBuffer[0] = 0;
   }
 
   getStatus(): KernelStatus {
@@ -257,11 +564,7 @@ export class PyodideKernel {
     if (!this.pyodide) return;
     const payload = JSON.stringify(this.scripts);
     await this.pyodide.runPythonAsync(`
-import sys
-_payload = __import__("json").loads(${JSON.stringify(payload)})
-g = sys.modules.get("molvis")
-if g is not None and hasattr(g, "run"):
-    g.run.__globals__["_MOLVIS_SCRIPTS"] = _payload
+_MOLVIS_SCRIPTS = __import__("json").loads(${JSON.stringify(payload)})
 `);
   }
 
@@ -280,29 +583,43 @@ if g is not None and hasattr(g, "run"):
     });
     try {
       this.pyodide = await loadPyodideFromCdn();
-      // Register bridge BEFORE bootstrap imports molvis_host
-      const bridge = this.bridge;
-      this.pyodide.registerJsModule("molvis_host", {
-        call: (method: string, params?: Record<string, unknown>) => {
-          if (!this.bridge) {
-            throw new Error("molvis host bridge not bound");
-          }
-          return this.bridge.call(method, params ?? {});
-        },
-      });
-      if (!bridge) {
+      // Prefer SharedArrayBuffer (true cooperative SIGINT). Fall back to a
+      // plain ArrayBuffer so checkInterrupt still works when Python yields to JS
+      // (RPC / await). Main-thread Pyodide cannot pre-empt pure Python loops.
+      if (this.pyodide.setInterruptBuffer) {
+        const storage =
+          typeof SharedArrayBuffer !== "undefined"
+            ? new SharedArrayBuffer(1)
+            : new ArrayBuffer(1);
+        this.interruptBuffer = new Uint8Array(storage);
+        this.interruptBuffer[0] = 0;
+        this.pyodide.setInterruptBuffer(this.interruptBuffer);
+      }
+      this.registerHostModules();
+      if (!this.rpc) {
         this.pushLog({
           source: "system",
           stream: "info",
-          text: "Host bridge not bound yet — camera calls will fail until app is ready.",
+          text: "RPC client not bound yet — bind app before draw/camera calls.",
         });
       }
+      this.pushLog({
+        source: "system",
+        stream: "info",
+        text: "Local-dev stack: numpy + molrs (micropip) + monorepo molpy/molvis…",
+      });
+      await installRuntimePackages(this.pyodide);
+      this.pushLog({
+        source: "system",
+        stream: "info",
+        text: "Bootstrapping mv.Stage() (InProcessTransport → RPCRouter)…",
+      });
       await this.bootstrapNamespace();
       this.setStatus("ready");
       this.pushLog({
         source: "system",
         stream: "info",
-        text: 'Pyodide ready. stage.camera.* is live; mv.run("camera.py") uses the script library.',
+        text: "Pyodide ready · LOCAL-DEV molpy + molvis (Stage API).",
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -330,18 +647,11 @@ if g is not None and hasattr(g, "run"):
   private async bootstrapNamespace(): Promise<void> {
     if (!this.pyodide) return;
     const payload = JSON.stringify(this.scripts);
+    // Hard-requires molvis (packed) + molpy (must already be importable).
     await this.pyodide.runPythonAsync(
       `_MOLVIS_SCRIPTS = __import__("json").loads(${JSON.stringify(payload)})\n` +
         BOOTSTRAP_PY,
     );
-    try {
-      await this.pyodide.loadPackage("micropip");
-      await this.pyodide.runPythonAsync(
-        `print("[kernel] micropip available; molpy wheel install TBD")`,
-      );
-    } catch {
-      /* optional */
-    }
   }
 
   async run(
@@ -368,6 +678,7 @@ if g is not None and hasattr(g, "run"):
 
     this.runLock = true;
     this.setStatus("busy");
+    this.clearInterruptSignal();
     let stdout = "";
     let stderr = "";
 
@@ -395,31 +706,40 @@ if g is not None and hasattr(g, "run"):
     });
 
     try {
-      const result = await this.pyodide.runPythonAsync(code);
-      let resultText: string | undefined;
-      if (result !== undefined && result !== null) {
-        resultText = String(result);
-        this.pushLog({
-          source,
-          stream: "stdout",
-          text: resultText,
-          cellId: meta?.cellId,
-        });
-      }
+      // Shared __main__ namespace so cells see each other's bindings.
+      // Last expression → Jupyter mimebundle (execute_result).
+      // ``%%mv.demo`` → molvis.demo.run_demo (statement pacing);
+      // loops still use plain ``await asyncio.sleep`` / ``camera.track``.
+      const raw = await this.pyodide.runPythonAsync(
+        `await run_user_cell_task(${JSON.stringify(code)})\n`,
+      );
+      const payload = parseCellPayload(raw);
       this.setStatus("ready");
-      return { ok: true, stdout, stderr, resultText };
+      const resultText = payload.result?.["text/plain"];
+      return {
+        ok: true,
+        stdout,
+        stderr,
+        data: payload.result ?? undefined,
+        displays: payload.displays.length ? payload.displays : undefined,
+        resultText,
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      const interrupted = isInterruptError(message);
       this.pushLog({
         source,
-        stream: "stderr",
-        text: message,
+        stream: interrupted ? "info" : "stderr",
+        text: interrupted ? "Execution stopped." : message,
         cellId: meta?.cellId,
       });
       this.setStatus("ready");
-      return { ok: false, stdout, stderr: stderr + message, error: message };
+      return interrupted
+        ? { ok: false, interrupted: true, stdout, stderr, error: "Execution stopped." }
+        : { ok: false, stdout, stderr: stderr + message, error: message };
     } finally {
       this.runLock = false;
+      this.clearInterruptSignal();
     }
   }
 
@@ -431,8 +751,75 @@ if g is not None and hasattr(g, "run"):
     );
   }
 
+  /**
+   * Stop the active cell (and any non-blocking camera track).
+   *
+   * Must **not** queue another ``runPythonAsync`` — that sits behind the
+   * active cell on Pyodide's API lock and never runs until the cell ends.
+   *
+   * Do **not** write SIGINT (2) into the interrupt buffer on main-thread
+   * Pyodide: that raises KeyboardInterrupt inside webloop callbacks
+   * (run_handle / call_later) and floods the console with uncaught
+   * PythonError. Async cells stop via asyncio.Task.cancel; background
+   * camera orbits via stage.camera.stop_track.
+   */
+  interrupt(): void {
+    const busy = this.runLock;
+    this.pushLog({
+      source: "system",
+      stream: "info",
+      text: busy ? "Stopping current cell…" : "Stopping background work…",
+    });
+
+    // Always clear any leftover SIGINT so webloop stops raising.
+    this.clearInterruptSignal();
+
+    let cancelled = false;
+    try {
+      if (this.cellCancel) {
+        cancelled = this.cellCancel();
+      } else if (this.pyodide?.runPython) {
+        // Fallback if bootstrap registration failed.
+        const result = this.pyodide.runPython(
+          "cancel_user_cell() if 'cancel_user_cell' in dir() else False",
+        );
+        cancelled = Boolean(result);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      // Cancel itself can surface KeyboardInterrupt if the buffer was set;
+      // treat that as a successful stop request.
+      if (isInterruptError(message)) {
+        cancelled = true;
+      } else {
+        this.pushLog({
+          source: "system",
+          stream: "stderr",
+          text: `Stop failed: ${message}`,
+        });
+      }
+    } finally {
+      this.clearInterruptSignal();
+    }
+
+    if (!busy && !cancelled) {
+      this.pushLog({
+        source: "system",
+        stream: "info",
+        text: "No running cell; requested camera stop if any.",
+      });
+    }
+  }
+
   async reset(): Promise<void> {
+    try {
+      this.interrupt();
+    } catch {
+      /* ignore */
+    }
     this.pyodide = null;
+    this.interruptBuffer = null;
+    this.cellCancel = null;
     this.runLock = false;
     this.lastError = null;
     this.setStatus("idle");
@@ -443,6 +830,39 @@ if g is not None and hasattr(g, "run"):
     });
     await this.start();
   }
+}
+
+/** True when a thrown message indicates user interrupt / task cancel. */
+export function isInterruptError(message: string): boolean {
+  return /CancelledError|KeyboardInterrupt|Interrupted by user|Execution stopped/i.test(
+    message,
+  );
+}
+
+/**
+ * Call a Python cancel function exposed as a PyProxy or plain function.
+ */
+function invokePyCancel(fn: unknown): boolean {
+  if (fn == null) return false;
+  try {
+    if (typeof fn === "function") {
+      return Boolean((fn as () => unknown)());
+    }
+    // PyProxy: .callMethod / call as method
+    const proxy = fn as {
+      call?: (thisArg: unknown, ...args: unknown[]) => unknown;
+      callMethod?: (name: string, ...args: unknown[]) => unknown;
+    };
+    if (typeof proxy.call === "function") {
+      return Boolean(proxy.call(fn));
+    }
+    if (typeof proxy.callMethod === "function") {
+      return Boolean(proxy.callMethod("__call__"));
+    }
+  } catch {
+    return false;
+  }
+  return false;
 }
 
 let singleton: PyodideKernel | null = null;

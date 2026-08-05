@@ -1,51 +1,29 @@
-import { createRoot, type Root } from "react-dom/client";
 import type { PluginAPI } from "../../types/plugin-api";
 import { WizardDialog } from "../../ui/WizardDialog";
-
-let hostEl: HTMLDivElement | null = null;
-let root: Root | null = null;
-
-function closeWizard(): void {
-  if (root) {
-    root.unmount();
-    root = null;
-  }
-  if (hostEl) {
-    hostEl.remove();
-    hostEl = null;
-  }
-}
-
-export function openWizard(api: PluginAPI): void {
-  closeWizard();
-  hostEl = document.createElement("div");
-  hostEl.dataset.molvisPlugin = "lammps-input-generator";
-  document.body.appendChild(hostEl);
-  root = createRoot(hostEl);
-  root.render(
-    <WizardDialog storage={api.storage} onClose={closeWizard} />,
-  );
-}
+import { COMMANDS, DIALOG_ID } from "../../version";
 
 /**
- * Register toolbar command that opens the multi-step generator dialog.
- * UI is owned by the command (portal), not a free-floating host chrome API.
+ * Register the generator wizard as a host dialog plus a palette command that
+ * opens it.
+ *
+ * This used to mount its own `createRoot` portal on `document.body` and keep
+ * module-level `hostEl` / `root` handles that had to be torn down by hand —
+ * a second modal lifecycle alongside the Alchemist plugin's. The host owns
+ * the dialog shell, so the plugin owns only its body content.
  */
 export function registerOpenWizard(api: PluginAPI): void {
-  api.commands.register(
-    "open-wizard",
-    () => {
-      openWizard(api);
-    },
-    {
-      toolbar: {
-        label: "LAMMPS Input",
-        order: 40,
-      },
-    },
-  );
-}
+  api.dialogs.register({
+    id: DIALOG_ID,
+    title: "LAMMPS Template",
+    size: "xl",
+    render: () => <WizardDialog storage={api.storage} />,
+  });
 
-export function disposeWizardHost(): void {
-  closeWizard();
+  api.commands.register(COMMANDS.openWizard, () => {}, {
+    toolbar: {
+      label: "LAMMPS Template",
+      order: 40,
+      opensDialog: DIALOG_ID,
+    },
+  });
 }

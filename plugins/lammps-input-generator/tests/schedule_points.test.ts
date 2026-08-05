@@ -31,7 +31,7 @@ const sample: TempControlPoint[] = [
 ];
 
 describe("tempPointsToSchedulePoints", () => {
-  it("maps 调温点 to polyline vertices", () => {
+  it("maps temperature points to polyline vertices", () => {
     expect(tempPointsToSchedulePoints(sample)).toEqual([
       { x: 0, y: 100 },
       { x: 1000, y: 300 },

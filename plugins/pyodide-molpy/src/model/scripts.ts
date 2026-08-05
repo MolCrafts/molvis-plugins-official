@@ -18,27 +18,36 @@ export interface ScriptLibrary {
 }
 
 const STORAGE_KEY = "scripts.v1";
+export const SCRIPTS_STORAGE_KEY = STORAGE_KEY;
 
 export const DEFAULT_CAMERA_SCRIPT = `\
-# camera.py — custom camera trajectory (called via mv.run("camera.py"))
-# Globals: stage (mv.Stage), mv (molvis module)
-# stage.camera.* is InProcess-bridged to the live viewer.
-import math
+import numpy as np
+import molvis as mv
 
-stage.camera.fit_view()
-n = 36
-for i in range(n):
-    alpha = (2 * math.pi * i) / n
-    stage.camera.set_pose(alpha=alpha, beta=1.1)
-    print(f"frame {i + 1}/{n}  alpha={alpha:.3f}")
-print("camera path done")
+stage = mv.Stage()
+stage.camera.fit()
+pose = stage.camera.pose
+t = np.asarray(pose.target, dtype=float)
+r = float(pose.radius)
+keys = [
+    (t[0] + r, t[1],     t[2] + 0.3 * r),
+    (t[0],     t[1] + r, t[2] + 0.3 * r),
+    (t[0] - r, t[1],     t[2] + 0.3 * r),
+    (t[0],     t[1] - r, t[2] + 0.3 * r),
+    (t[0] + r, t[1],     t[2] + 0.3 * r),
+]
+stage.camera.track(keys, target=tuple(t), duration=4.0, rate=1.0)
 `;
 
 export const DEFAULT_HELLO_SCRIPT = `\
 # hello.py — sample script
+import molvis as mv
+
+stage = mv.Stage()
 print("hello from", __name__)
-print("stage.mode =", stage.mode)
-# Nested scripts work:
+print("stage:", stage.name)
+print("mode:", stage.current_mode)
+# Nested scripts:
 # mv.run("camera.py")
 `;
 
@@ -70,6 +79,24 @@ export function defaultLibrary(): ScriptLibrary {
   };
 }
 
+/**
+ * How many scripts are actually persisted, or 0 when nothing is saved.
+ * Not `loadLibrary(...).files` length — that falls back to the default
+ * library, so an untouched install would report scripts the user never wrote.
+ */
+export function storedScriptCount(
+  storage: { getItem(k: string): string | null } | null,
+): number {
+  const raw = storage?.getItem(STORAGE_KEY);
+  if (!raw) return 0;
+  try {
+    const parsed = JSON.parse(raw) as ScriptLibrary;
+    return parsed.files ? Object.keys(parsed.files).length : 0;
+  } catch {
+    return 0;
+  }
+}
+
 export function loadLibrary(
   storage: { getItem(k: string): string | null } | null,
 ): ScriptLibrary {
@@ -78,15 +105,17 @@ export function loadLibrary(
     const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return defaultLibrary();
     const parsed = JSON.parse(raw) as ScriptLibrary;
-    if (parsed?.version !== 1 || !parsed.files || typeof parsed.files !== "object") {
+    if (
+      parsed?.version !== 1 ||
+      !parsed.files ||
+      typeof parsed.files !== "object"
+    ) {
       return defaultLibrary();
     }
     const names = Object.keys(parsed.files);
     if (names.length === 0) return defaultLibrary();
     const active =
-      parsed.active && parsed.files[parsed.active]
-        ? parsed.active
-        : names[0];
+      parsed.active && parsed.files[parsed.active] ? parsed.active : names[0];
     return { version: 1, active, files: parsed.files };
   } catch {
     return defaultLibrary();
@@ -150,5 +179,3 @@ export function scriptsMap(lib: ScriptLibrary): Record<string, string> {
   }
   return out;
 }
-
-export const SCRIPTS_STORAGE_KEY = STORAGE_KEY;

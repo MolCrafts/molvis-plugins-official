@@ -14,6 +14,7 @@ import type { PluginStorage } from "../types/plugin-api";
 import { useKernel } from "./hooks/useKernel";
 import { loadMonaco, type MonacoEditor } from "./monaco";
 import { css } from "./styles";
+import { monacoThemeId, watchHostTheme } from "./theme";
 
 /**
  * Script library editor — **only** place Monaco is used.
@@ -78,7 +79,7 @@ export function ScriptDialog({
           lineNumbers: "on",
           wordWrap: "on",
           scrollBeyondLastLine: false,
-          theme: "vs",
+          theme: monacoThemeId(),
         });
         editorRef.current = editor;
         setEditorReady(true);
@@ -96,8 +97,20 @@ export function ScriptDialog({
       }
     })();
 
+    const unwatch = watchHostTheme(() => {
+      // Monaco global theme — re-apply when host toggles .dark.
+      void loadMonaco().then((monaco) => {
+        try {
+          monaco.editor.setTheme?.(monacoThemeId());
+        } catch {
+          /* ignore */
+        }
+      });
+    });
+
     return () => {
       cancelled = true;
+      unwatch();
     };
     // Only bootstrap once; active file switches handled below.
     // eslint-disable-next-line react-hooks/exhaustive-deps

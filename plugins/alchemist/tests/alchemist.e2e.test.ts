@@ -14,7 +14,7 @@ test("plays a responsive standalone experiment", async ({ page, serve }) => {
   expect(
     /\b(?:Now|Next|Hold)\b/.test(await page.locator("body").innerText()),
   ).toBe(false);
-  await expect(page.getByText("H → K", { exact: true })).toBeVisible();
+  await expect(page.getByText("H → Au", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Start" }).click();
   const canvas = page.getByTestId("game-canvas");

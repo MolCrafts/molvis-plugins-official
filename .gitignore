@@ -1,12 +1,39 @@
+# Dependencies
 node_modules/
 package-lock.json
 npm-shrinkwrap.json
 yarn.lock
 pnpm-lock.yaml
+
+# TypeScript / bundler cache
 *.tsbuildinfo
+.turbo/
+.cache/
+.rspack-cache/
+
+# Local / secrets
 .DS_Store
 .env
 .env.*
 !.env.example
+*.local
+.claude/settings.local.json
+
+# Logs & diagnostics
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Test / coverage artifacts
+coverage/
+*.lcov
+.nyc_output/
+playwright-report/
+test-results/
+rstest-report/
+
 # dist/ is committed so jsDelivr can serve the plugin from GitHub tags.
-# Rebuild with `npm run build` before tagging a release.
+# CI rebuilds and fails if committed dist/ is stale. See README Release.

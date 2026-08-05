@@ -22,6 +22,7 @@ export function useKernel() {
 
   const start = useCallback(() => kernel.start(), [kernel]);
   const reset = useCallback(() => kernel.reset(), [kernel]);
+  const interrupt = useCallback(() => kernel.interrupt(), [kernel]);
   const clearLogs = useCallback(() => kernel.clearLogs(), [kernel]);
   const run = useCallback(
     (code: string, source: RunSource, meta?: { cellId?: string }) =>
@@ -43,6 +44,7 @@ export function useKernel() {
     lastError: kernel.getLastError(),
     start,
     reset,
+    interrupt,
     clearLogs,
     run,
     runNamedScript,

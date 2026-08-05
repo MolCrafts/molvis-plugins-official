@@ -17,7 +17,7 @@ describe("script library model", () => {
   it("ships camera.py by default", () => {
     const lib = defaultLibrary();
     expect(listScriptNames(lib)).toContain("camera.py");
-    expect(getScriptSource(lib, "camera")).toContain("stage.camera.set_pose");
+    expect(getScriptSource(lib, "camera")).toContain("stage.camera.track");
   });
 
   it("upserts and maps sources for kernel sync", () => {

@@ -1,9 +1,9 @@
 {
   "name": "@molcrafts/molvis-plugins-official",
-  "version": "0.1.2",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
-  "description": "Official MolVis page plugin collection (meta + per-plugin packages)",
+  "description": "Official MolVis plugin collection meta. Version MAJOR.MINOR.PATCH: major=plugin system, minor=plugin count (4), patch=fixes. Children keep independent versions.",
   "license": "BSD-3-Clause",
   "repository": {
     "type": "git",
@@ -24,32 +24,57 @@
     "plugins/*"
   ],
   "scripts": {
-    "build": "npm run build -w @molcrafts/molvis-plugin-lammps-input-generator && npm run build -w @molcrafts/molvis-plugin-alchemist && npm run build -w @molcrafts/molvis-plugin-pyodide-molpy && npm run build:meta",
+    "build": "npm run build -w @molcrafts/molvis-plugin-lammps-input-generator && npm run build -w @molcrafts/molvis-plugin-alchemist && npm run build -w @molcrafts/molvis-plugin-pyodide-molpy && npm run build -w @molcrafts/molvis-plugin-carbon-tube-builder && npm run build:meta",
     "build:meta": "rsbuild build",
-    "typecheck": "npm run typecheck -w @molcrafts/molvis-plugin-lammps-input-generator && npm run typecheck -w @molcrafts/molvis-plugin-alchemist && npm run typecheck -w @molcrafts/molvis-plugin-pyodide-molpy && tsc --noEmit -p tsconfig.json",
-    "test": "npm run test -w @molcrafts/molvis-plugin-lammps-input-generator && npm run test -w @molcrafts/molvis-plugin-alchemist && npm run test -w @molcrafts/molvis-plugin-pyodide-molpy",
+    "typecheck": "npm run typecheck -w @molcrafts/molvis-plugin-lammps-input-generator && npm run typecheck -w @molcrafts/molvis-plugin-alchemist && npm run typecheck -w @molcrafts/molvis-plugin-pyodide-molpy && npm run typecheck -w @molcrafts/molvis-plugin-carbon-tube-builder && tsc --noEmit -p tsconfig.json",
+    "test": "npm run test -w @molcrafts/molvis-plugin-lammps-input-generator && npm run test -w @molcrafts/molvis-plugin-alchemist && npm run test -w @molcrafts/molvis-plugin-pyodide-molpy && npm run test -w @molcrafts/molvis-plugin-carbon-tube-builder",
     "test:e2e": "npm run test:e2e -w @molcrafts/molvis-plugin-alchemist",
-    "check": "npm run typecheck && npm run test && npm run build",
-    "prepublishOnly": "npm run check"
+    "sync:manifests": "node scripts/sync-manifest-versions.mjs",
+    "check:manifests": "node scripts/sync-manifest-versions.mjs --check",
+    "check:meta-version": "node scripts/check-meta-version.mjs",
+    "check": "npm run check:contract && npm run check:manifests && npm run check:meta-version && npm run typecheck && npm run test && npm run build",
+    "prepublishOnly": "npm run check",
+    "dev": "node scripts/dev-serve.mjs meta",
+    "dev:meta": "node scripts/dev-serve.mjs meta",
+    "dev:pyodide": "node scripts/dev-serve.mjs pyodide",
+    "dev:lammps": "node scripts/dev-serve.mjs lammps",
+    "dev:alchemist": "node scripts/dev-serve.mjs alchemist",
+    "dev:carbon-tube": "node scripts/dev-serve.mjs carbon-tube",
+    "serve": "node scripts/dev-serve.mjs meta",
+    "serve:meta": "node scripts/dev-serve.mjs meta",
+    "serve:pyodide": "node scripts/dev-serve.mjs pyodide",
+    "serve:lammps": "node scripts/dev-serve.mjs lammps",
+    "serve:alchemist": "node scripts/dev-serve.mjs alchemist",
+    "serve:carbon-tube": "node scripts/dev-serve.mjs carbon-tube",
+    "preview": "npm run build && npx --yes serve -l 4173 --cors .",
+    "preview:pyodide": "npm run build -w @molcrafts/molvis-plugin-pyodide-molpy && npx --yes serve -l 4174 --cors plugins/pyodide-molpy",
+    "check:contract": "node scripts/check-vendored-contract.mjs && npm run check:contract -w @molcrafts/molvis-plugin-lammps-input-generator && npm run check:contract -w @molcrafts/molvis-plugin-alchemist && npm run check:contract -w @molcrafts/molvis-plugin-pyodide-molpy && npm run check:contract -w @molcrafts/molvis-plugin-carbon-tube-builder"
   },
   "peerDependencies": {
     "@molcrafts/molplot": ">=0.1.0",
-    "@molcrafts/molrs": ">=0.10.0",
+    "@molcrafts/molrs": ">=0.12.0",
     "@molcrafts/molvis-core": ">=0.1.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@molcrafts/molplot": "^0.1.3",
-    "@molcrafts/molrs": "^0.10.0",
+    "@molcrafts/molrs": "^0.12.0",
     "@molcrafts/molvis-core": "^0.1.1",
     "@rsbuild/core": "^2.1.9",
+    "@rsbuild/plugin-react": "^2.1.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.28.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "typescript": "^7.0.2",
-    "@rsbuild/plugin-react": "^2.1.0"
+    "tailwind-merge": "^3.6.0",
+    "typescript": "^7.0.2"
   },
-  "packageManager": "npm@11.17.0+sha512.3eeaf18997b11070d313849268b23766b9db0068997dec9471073170fe43fa17f2b4d0337bf0f52330ee2274e7f5754b21b01052742e48f5c9c74d8b1e32ef43"
+  "packageManager": "npm@11.17.0+sha512.3eeaf18997b11070d313849268b23766b9db0068997dec9471073170fe43fa17f2b4d0337bf0f52330ee2274e7f5754b21b01052742e48f5c9c74d8b1e32ef43",
+  "dependencies": {
+    "radix-ui": "^1.6.7"
+  }
 }

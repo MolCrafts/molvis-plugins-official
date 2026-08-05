@@ -16,21 +16,37 @@ export type Ensemble = "nve" | "nvt" | "npt";
 /** Thermostat style for NVT/NPT segments. */
 export type Thermostat = "nose-hoover" | "berendsen" | "langevin";
 
+/** One force-field script line added from the preset dropdown (or custom). */
+export interface ForceFieldLine {
+  id: string;
+  /** Full logical line (may start with `#`). */
+  text: string;
+  /** Preset kind key, or `"custom"`. */
+  kind: string;
+}
+
 export interface ForceFieldPlaceholders {
-  /** Emitted as-is (one logical line). */
-  pairStyle: string;
-  /** Emitted as-is (one logical line). */
-  pairCoeff: string;
-  /**
-   * Extra free-form LAMMPS lines (bond/angle/… or overrides).
-   * Blank lines preserved; `#` comments allowed.
-   */
-  extraLines: string;
-  /**
-   * When true, append the standard commented stubs
-   * (bond/angle/dihedral/improper/kspace/special_bonds).
-   */
-  includeCommentedStubs: boolean;
+  /** Ordered LAMMPS force-field commands. Pair commands are not special. */
+  lines: ForceFieldLine[];
+  /** @deprecated v2 draft/RPC compatibility; the form migrates these to lines. */
+  pairStyle?: string;
+  /** @deprecated v2 draft/RPC compatibility; the form migrates these to lines. */
+  pairCoeff?: string;
+}
+
+export type NeighborStyle = "bin" | "nsq" | "multi";
+
+export interface NeighborConfig {
+  skin: number;
+  style: NeighborStyle;
+  every: number;
+  delay: number;
+  check: boolean;
+  once: boolean;
+  page: number;
+  one: number;
+  /** 0 lets LAMMPS choose the bin size. */
+  binsize: number;
 }
 
 export interface InitConfig {
@@ -41,8 +57,11 @@ export interface InitConfig {
   timestep: number;
   thermoEvery: number;
   thermoStyle: string;
-  neighborSkin: number;
-  neighborCheck: boolean;
+  neighbor?: NeighborConfig;
+  /** @deprecated v2 RPC compatibility. */
+  neighborSkin?: number;
+  /** @deprecated v2 RPC compatibility. */
+  neighborCheck?: boolean;
   forceField: ForceFieldPlaceholders;
 }
 
@@ -52,10 +71,14 @@ export interface MinimizeConfig {
   maxiter: number;
   maxeval: number;
   minStyle: string;
+  dmax?: number;
+  norm?: "two" | "max" | "inf";
+  fireIntegrator?: "eulerimplicit" | "verlet" | "leapfrog";
+  fireTmax?: number;
 }
 
 /**
- * Temperature control point (调温点).
+ * Temperature control point.
  *
  * The T schedule is the piecewise-linear polyline through these points
  * (sorted by `step`). Point 0 is the initial temperature; each later point
@@ -78,6 +101,11 @@ export interface TempControlPoint {
   pStop?: number;
   tdamp?: number;
   pdamp?: number;
+  /**
+   * `fix langevin` RNG seed for this segment. Must differ between replicas
+   * that are meant to be statistically independent.
+   */
+  langevinSeed?: number;
 }
 
 /** Derived run segment between two control points (for generate / tests). */
@@ -93,6 +121,8 @@ export interface EqStage {
   nsteps: number;
   tdamp?: number;
   pdamp?: number;
+  /** See {@link TempControlPoint.langevinSeed}. */
+  langevinSeed?: number;
 }
 
 export interface DumpConfig {

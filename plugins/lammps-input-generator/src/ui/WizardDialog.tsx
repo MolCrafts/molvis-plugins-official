@@ -1,33 +1,52 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { generateLammpsEqInput } from "../generate/generate";
-import { defaultConfig, STORAGE_KEY } from "../model/defaults";
+import {
+  defaultConfig,
+  normalizeConfig,
+} from "../model/defaults";
 import type { LammpsEqConfig } from "../model/types";
 import type { PluginStorage } from "../types/plugin-api";
+import {
+  DEFAULT_SCRIPT_FILENAME,
+  LEGACY_STORAGE_KEY,
+  STORAGE_KEY,
+} from "../version";
+import { ForceFieldSection } from "./sections/ForceFieldSection";
+import { NeighborSection } from "./sections/NeighborSection";
+import { SystemSection } from "./sections/SystemSection";
+import { ThermoSection } from "./sections/ThermoSection";
 import { EquilibrationStep } from "./steps/EquilibrationStep";
-import { InitStep } from "./steps/InitStep";
 import { MinimizeStep } from "./steps/MinimizeStep";
 import { OutputStep } from "./steps/OutputStep";
 import { PreviewStep } from "./steps/PreviewStep";
+import { SettingsSection } from "./SettingsSection";
 import { css } from "./styles";
 
-const STEPS = [
-  "Init",
-  "Minimize",
-  "Equilibration",
-  "Output",
-  "Preview",
+const CATEGORIES = [
+  { id: "system", label: "System" },
+  { id: "forcefield", label: "Force field" },
+  { id: "neighbor", label: "Neighbor" },
+  { id: "thermo", label: "Thermo" },
+  { id: "minimize", label: "Minimize" },
+  { id: "equilibration", label: "Equilibration" },
+  { id: "output", label: "Output" },
+  { id: "preview", label: "Preview" },
 ] as const;
 
 function loadDraft(storage: PluginStorage | null): LammpsEqConfig {
   if (!storage) return defaultConfig();
   try {
     const raw = storage.getItem(STORAGE_KEY);
-    if (!raw) return defaultConfig();
-    const parsed = JSON.parse(raw) as LammpsEqConfig;
-    if (!parsed?.init || !Array.isArray(parsed.tempPoints)) {
+    if (!raw) {
+      // try previous key once
+      const legacy = storage.getItem(LEGACY_STORAGE_KEY);
+      if (legacy) {
+        const n = normalizeConfig(JSON.parse(legacy));
+        if (n) return n;
+      }
       return defaultConfig();
     }
-    return parsed;
+    return normalizeConfig(JSON.parse(raw)) ?? defaultConfig();
   } catch {
     return defaultConfig();
   }
@@ -43,15 +62,16 @@ function downloadText(filename: string, text: string): void {
   URL.revokeObjectURL(url);
 }
 
+/** Compact host-native settings surface: hairline navigation and one scroll area. */
 export function WizardDialog({
   storage,
-  onClose,
 }: {
   storage: PluginStorage | null;
-  onClose: () => void;
 }) {
-  const [step, setStep] = useState(0);
   const [config, setConfig] = useState<LammpsEqConfig>(() => loadDraft(storage));
+  const [activeId, setActiveId] = useState<string>(CATEGORIES[0].id);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const navLockUntil = useRef(0);
 
   const script = useMemo(() => generateLammpsEqInput(config), [config]);
 
@@ -75,103 +95,135 @@ export function WizardDialog({
     }
   };
 
+  const scrollToCategory = useCallback((id: string) => {
+    const root = scrollRef.current;
+    if (!root) return;
+    const target = root.querySelector<HTMLElement>(
+      `[data-settings-section="${id}"]`,
+    );
+    if (!target) return;
+    setActiveId(id);
+    navLockUntil.current = performance.now() + 450;
+    const top =
+      target.getBoundingClientRect().top -
+      root.getBoundingClientRect().top +
+      root.scrollTop;
+    root.scrollTo({ top: Math.max(0, top - 8), behavior: "smooth" });
+  }, []);
+
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root) return;
+    const ids = CATEGORIES.map((c) => c.id);
+    const nodes = ids
+      .map((id) =>
+        root.querySelector<HTMLElement>(`[data-settings-section="${id}"]`),
+      )
+      .filter((el): el is HTMLElement => el != null);
+    if (nodes.length === 0) return;
+
+    const updateActive = () => {
+      if (performance.now() < navLockUntil.current) return;
+      const rootTop = root.getBoundingClientRect().top;
+      const threshold = rootTop + root.clientHeight * 0.28;
+      let current = nodes[0].dataset.settingsSection ?? nodes[0].id;
+      for (const node of nodes) {
+        if (node.getBoundingClientRect().top <= threshold) {
+          current = node.dataset.settingsSection ?? node.id;
+        } else {
+          break;
+        }
+      }
+      setActiveId((prev) => (prev === current ? prev : current));
+    };
+
+    updateActive();
+    root.addEventListener("scroll", updateActive, { passive: true });
+    return () => root.removeEventListener("scroll", updateActive);
+  }, []);
+
+  const setInit = (init: typeof config.init) => persist({ ...config, init });
+
+  // Scrim, Escape, focus trap and the title/close header belong to the host
+  // dialog shell (`api.dialogs`). This component renders body content only —
+  // it used to hand-roll all of that, in parallel with a second, subtly
+  // different implementation in the Alchemist plugin.
   return (
-    <div
-      style={css.overlay}
-      role="dialog"
-      aria-modal="true"
-      aria-label="LAMMPS input generator"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div style={css.panel}>
-        <header style={css.header}>
-          <h2 style={css.title}>LAMMPS input</h2>
-          <button type="button" style={css.btn("ghost")} onClick={onClose}>
-            Close
-          </button>
-        </header>
-
-        <nav style={css.steps}>
-          {STEPS.map((label, i) => (
-            <button
-              key={label}
-              type="button"
-              style={css.stepBtn(i === step, i < step)}
-              onClick={() => setStep(i)}
-            >
-              {i + 1}. {label}
-            </button>
-          ))}
-        </nav>
-
-        <div style={css.body}>
-          {step === 0 && (
-            <InitStep
-              value={config.init}
-              onChange={(init) => persist({ ...config, init })}
-            />
-          )}
-          {step === 1 && (
-            <MinimizeStep
-              value={config.minimize}
-              onChange={(minimize) => persist({ ...config, minimize })}
-            />
-          )}
-          {step === 2 && (
-            <EquilibrationStep
-              tempPoints={config.tempPoints}
-              onChange={(tempPoints) => persist({ ...config, tempPoints })}
-            />
-          )}
-          {step === 3 && (
-            <OutputStep
-              value={config.output}
-              onChange={(output) => persist({ ...config, output })}
-            />
-          )}
-          {step === 4 && (
-            <PreviewStep
-              script={script}
-              onCopy={() => void onCopy()}
-              onDownload={() => downloadText("in.eq", script)}
-            />
-          )}
-        </div>
-
-        <footer style={css.footer}>
-          <button
-            type="button"
-            style={css.btn("ghost")}
-            disabled={step === 0}
-            onClick={() => setStep((s) => Math.max(0, s - 1))}
-          >
-            Back
-          </button>
-          <div style={{ display: "flex", gap: 8 }}>
-            {step < STEPS.length - 1 ? (
+    <div style={css.bodyRow}>
+          <nav style={css.rail} aria-label="LAMMPS sections">
+            {CATEGORIES.map((cat) => (
               <button
+                key={cat.id}
                 type="button"
-                style={css.btn("primary")}
-                onClick={() =>
-                  setStep((s) => Math.min(STEPS.length - 1, s + 1))
+                style={css.railBtn(activeId === cat.id)}
+                aria-current={activeId === cat.id ? "true" : undefined}
+                onClick={() => scrollToCategory(cat.id)}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </nav>
+
+          <div ref={scrollRef} style={css.scroll}>
+            <div style={css.page}>
+              <SystemSection value={config.init} onChange={setInit} />
+              <ForceFieldSection
+                value={config.init.forceField}
+                onChange={(forceField) =>
+                  setInit({ ...config.init, forceField })
                 }
+              />
+              <NeighborSection value={config.init} onChange={setInit} />
+              <ThermoSection value={config.init} onChange={setInit} />
+
+              <SettingsSection
+                id="minimize"
+                title="Minimize"
+                description="Optional energy minimization before equilibration stages."
               >
-                Next
-              </button>
-            ) : (
-              <button
-                type="button"
-                style={css.btn("primary")}
-                onClick={() => downloadText("in.eq", script)}
+                <MinimizeStep
+                  value={config.minimize}
+                  onChange={(minimize) => persist({ ...config, minimize })}
+                />
+              </SettingsSection>
+
+              <SettingsSection
+                id="equilibration"
+                title="Equilibration"
+                description="Temperature schedule. Each control point ends a run segment."
               >
-                Download in.eq
-              </button>
-            )}
-          </div>
-        </footer>
+                <EquilibrationStep
+                  tempPoints={config.tempPoints}
+                  units={config.init.units}
+                  onChange={(tempPoints) => persist({ ...config, tempPoints })}
+                />
+              </SettingsSection>
+
+              <SettingsSection
+                id="output"
+                title="Output"
+                description="Dump, restart, and final write_data paths."
+              >
+                <OutputStep
+                  value={config.output}
+                  onChange={(output) => persist({ ...config, output })}
+                />
+              </SettingsSection>
+
+              <SettingsSection
+                id="preview"
+                title="Preview"
+                description="Generated classic LAMMPS input script."
+                last
+              >
+                <PreviewStep
+                  script={script}
+                  onCopy={() => void onCopy()}
+                  onDownload={() => downloadText(DEFAULT_SCRIPT_FILENAME, script)}
+                />
+              </SettingsSection>
       </div>
     </div>
+  </div>
   );
 }

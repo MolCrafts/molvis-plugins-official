@@ -1,22 +1,41 @@
-import { useEffect, useRef } from "react";
+import { XTERM_CSS_URL, XTERM_ESM_URL, XTERM_FIT_ESM_URL } from "../cdn";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useKernel } from "./hooks/useKernel";
-import { css } from "./styles";
+import {
+  readXtermTheme,
+  tokens,
+  watchHostTheme,
+  type XtermTheme,
+} from "./theme";
 
+/**
+ * Pure xterm body for the host WorkbenchBottomPanel.
+ *
+ * NO toolbar, NO Clear button, NO "kernel: idle", NO welcome banner.
+ * Clear only via right-click context menu.
+ *
+ * Theme: follows MolVis `--molvis-*` tokens (light/dark), never hard-coded black.
+ */
 type TermLike = {
   writeln: (s: string) => void;
   open: (el: HTMLElement) => void;
   loadAddon: (a: { fit?: () => void }) => void;
   dispose: () => void;
+  clear?: () => void;
+  options: { theme?: XtermTheme };
+  refresh?: (start: number, end: number) => void;
+  rows?: number;
 };
 
 type FitLike = { fit: () => void };
+type CtxMenu = { x: number; y: number };
 
 async function loadXterm(): Promise<{
   Terminal: new (opts: Record<string, unknown>) => TermLike;
   FitAddon: new () => FitLike;
 }> {
-  const termUrl = "https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/+esm";
-  const fitUrl = "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/+esm";
+  const termUrl = XTERM_ESM_URL;
+  const fitUrl = XTERM_FIT_ESM_URL;
   if (typeof document !== "undefined") {
     const id = "molvis-xterm-css";
     if (!document.getElementById(id)) {
@@ -24,7 +43,7 @@ async function loadXterm(): Promise<{
       link.id = id;
       link.rel = "stylesheet";
       link.href =
-        "https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css";
+        XTERM_CSS_URL;
       document.head.appendChild(link);
     }
   }
@@ -48,43 +67,77 @@ async function loadXterm(): Promise<{
   };
 }
 
-/**
- * Bottom console: prefers xterm.js from CDN; falls back to a <pre> log.
- */
+function applyTermTheme(term: TermLike, theme: XtermTheme) {
+  term.options.theme = theme;
+  const rows = term.rows ?? 0;
+  if (rows > 0 && term.refresh) {
+    try {
+      term.refresh(0, rows - 1);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 export function ConsolePanel(_props: { app: unknown }) {
-  const { logs, clearLogs, status } = useKernel();
+  const { logs, clearLogs } = useKernel();
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const preRef = useRef<HTMLPreElement | null>(null);
   const termRef = useRef<TermLike | null>(null);
   const writtenIds = useRef(new Set<string>());
-  const useFallback = useRef(false);
+  const [menu, setMenu] = useState<CtxMenu | null>(null);
+  const [hasTerm, setHasTerm] = useState(false);
+
+  const doClear = useCallback(() => {
+    clearLogs();
+    writtenIds.current.clear();
+    if (preRef.current) preRef.current.textContent = "";
+    const term = termRef.current;
+    if (term?.clear) term.clear();
+    else term?.writeln("\x1b[2J\x1b[H");
+    setMenu(null);
+  }, [clearLogs]);
 
   useEffect(() => {
     let cancelled = false;
     let ro: ResizeObserver | null = null;
+    let unwatch: (() => void) | null = null;
 
     void (async () => {
       try {
         const { Terminal, FitAddon } = await loadXterm();
         if (cancelled || !hostRef.current) return;
+        const theme = readXtermTheme(rootRef.current ?? hostRef.current);
         const term = new Terminal({
           convertEol: true,
           fontSize: 12,
           fontFamily: "ui-monospace, Menlo, Consolas, monospace",
-          theme: {
-            background: "#0f1412",
-            foreground: "#e8f0eb",
-            cursor: "#e8f0eb",
-          },
+          theme,
           disableStdin: true,
         });
         const fit = new FitAddon();
         term.loadAddon(fit);
         term.open(hostRef.current);
         fit.fit();
-        term.writeln("MolVis Python console");
-        term.writeln(`status: ${status}`);
         termRef.current = term;
+        setHasTerm(true);
+
+        // Keep xterm + <pre> fallback in sync with host light/dark.
+        unwatch = watchHostTheme(() => {
+          const el = rootRef.current ?? hostRef.current;
+          if (!el) return;
+          const next = readXtermTheme(el);
+          if (termRef.current) applyTermTheme(termRef.current, next);
+          if (preRef.current) {
+            preRef.current.style.background = next.background;
+            preRef.current.style.color = next.foreground;
+          }
+          if (rootRef.current) {
+            rootRef.current.style.background = next.background;
+          }
+        });
+
         ro = new ResizeObserver(() => {
           try {
             fit.fit();
@@ -94,18 +147,19 @@ export function ConsolePanel(_props: { app: unknown }) {
         });
         ro.observe(hostRef.current);
       } catch {
-        useFallback.current = true;
+        setHasTerm(false);
       }
     })();
 
     return () => {
       cancelled = true;
+      unwatch?.();
       ro?.disconnect();
       termRef.current?.dispose();
       termRef.current = null;
       writtenIds.current.clear();
     };
-  }, [status]);
+  }, []);
 
   useEffect(() => {
     const term = termRef.current;
@@ -120,7 +174,6 @@ export function ConsolePanel(_props: { app: unknown }) {
             : line.cellId
               ? `[cell ${line.cellId.slice(-4)}] `
               : "[cell] ";
-      const text = `${prefix}${line.text}`;
       if (term) {
         const color =
           line.stream === "stderr"
@@ -134,41 +187,111 @@ export function ConsolePanel(_props: { app: unknown }) {
         }
       } else if (preRef.current) {
         preRef.current.textContent =
-          (preRef.current.textContent ?? "") + text + "\n";
+          (preRef.current.textContent ?? "") + `${prefix}${line.text}\n`;
         preRef.current.scrollTop = preRef.current.scrollHeight;
       }
     }
   }, [logs]);
 
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    const t = window.setTimeout(() => {
+      window.addEventListener("pointerdown", close);
+      window.addEventListener("keydown", onKey);
+    }, 0);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener("pointerdown", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [menu]);
+
   return (
-    <div style={css.consoleHost}>
-      <div style={css.consoleBar}>
-        <button
-          type="button"
-          style={css.btn()}
-          onClick={() => {
-            clearLogs();
-            writtenIds.current.clear();
-            if (preRef.current) preRef.current.textContent = "";
-          }}
-        >
-          Clear
-        </button>
-        <span style={css.status}>kernel: {status}</span>
-      </div>
-      <div ref={hostRef} style={css.xterm} />
+    <div
+      ref={rootRef}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        minHeight: 0,
+        background: tokens.panel,
+        color: tokens.fg,
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setMenu({ x: e.clientX, y: e.clientY });
+      }}
+    >
+      <div ref={hostRef} style={{ flex: 1, minHeight: 0, padding: 4 }} />
       <pre
         ref={preRef}
         style={{
-          ...css.out,
-          display: termRef.current ? "none" : "block",
+          display: hasTerm ? "none" : "block",
           flex: 1,
-          maxHeight: "none",
           margin: 0,
-          background: "#0f1412",
-          color: "#e8f0eb",
+          padding: 8,
+          overflow: "auto",
+          background: tokens.panel,
+          color: tokens.fg,
+          fontFamily: "ui-monospace, Menlo, Consolas, monospace",
+          fontSize: 11,
+          whiteSpace: "pre-wrap",
         }}
       />
+
+      {menu ? (
+        <div
+          role="menu"
+          style={{
+            position: "fixed",
+            left: menu.x,
+            top: menu.y,
+            zIndex: 10050,
+            minWidth: 120,
+            padding: 4,
+            borderRadius: 6,
+            border: `1px solid ${tokens.border}`,
+            background: tokens.panelRaised,
+            boxShadow: tokens.shadow,
+            fontSize: 12,
+            color: tokens.fg,
+            fontFamily:
+              'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            style={{
+              display: "block",
+              width: "100%",
+              border: "none",
+              background: "transparent",
+              textAlign: "left",
+              padding: "6px 10px",
+              borderRadius: 4,
+              cursor: "pointer",
+              color: "inherit",
+              fontSize: 12,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = tokens.interactive;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent";
+            }}
+            onClick={doClear}
+          >
+            Clear
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
