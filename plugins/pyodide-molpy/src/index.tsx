@@ -137,7 +137,7 @@ export function registerPyodideMolpy(api: PluginAPI): void {
     },
   );
 
-  // Clear notebook → caffeine draw → slow orbit → %%mv.demo style tour.
+  // Clear notebook → caffeine draw_frame+commit → orbit → style/theme tours.
   api.commands.register(
     "ipython-demo",
     () => {
@@ -145,7 +145,7 @@ export function registerPyodideMolpy(api: PluginAPI): void {
       api.app.setMode(pythonModeId);
       resetToDemoNotebook(api.storage);
       api.log.info(
-        "IPython: Demo — caffeine · draw → slow orbit → %%mv.demo styles",
+        "IPython: Demo — caffeine · draw_frame+commit → orbit → styles/themes",
       );
     },
     {

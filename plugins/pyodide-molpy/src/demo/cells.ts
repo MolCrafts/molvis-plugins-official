@@ -1,9 +1,9 @@
 /**
  * Default notebook demo — caffeine showcase (3 cells).
  *
- * 1. Load + draw via stage.draw (bond_type / Kekulé path)
+ * 1. Load + draw_frame + commit (edit pool → HEAD)
  * 2. Slow infinite camera orbit
- * 3. %%mv.demo representation style tour
+ * 3. %%mv.demo: style tour, then theme tour (set_style outside theme loop)
  *
  * Cross-cell names must stay public (frame, stage) — kernel drops ``_x``.
  */
@@ -15,8 +15,10 @@ import molvis as mv
 stage = mv.Stage()
 frame = mp.io.SmilesReader("CN1C=NC2=C1C(=O)N(C(=O)N2C)C").read()
 stage.clear()
-stage.draw(frame)
+stage.draw_frame(frame)
+stage.commit()
 stage.camera.fit()
+print("caffeine:", frame)
 `;
 
 export const DEMO_CAFFEINE_ORBIT = `\
@@ -33,11 +35,15 @@ keys = [
     (t[0] + r, t[1],     t[2] + 0.30 * r),
 ]
 stage.camera.track(keys, target=t, duration=np.inf, rate=0.5)
+print("orbiting… interrupt to stop")
 `;
 
 export const DEMO_CAFFEINE_STYLES = `\
-%%mv.demo delay=1.0
+%%mv.demo delay=0.5
+for style in stage.STYLE:
+    print("style:", style)
+    stage.set_style(style)
 for theme in stage.THEME:
-    for style in stage.STYLE:
-        stage.set_style(style, theme)
+    print("theme:", theme)
+    stage.set_theme(theme)
 `;

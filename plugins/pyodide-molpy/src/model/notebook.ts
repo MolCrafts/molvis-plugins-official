@@ -72,7 +72,7 @@ export function emptyNotebook(): NotebookState {
 }
 
 /**
- * Three plain cells: caffeine draw → slow infinite orbit → %%mv.demo styles.
+ * Three plain cells: caffeine draw_frame+commit → infinite orbit → style/theme.
  * Used by the "IPython: Demo" command (clear → fill).
  */
 export function demoNotebook(): NotebookState {
@@ -201,7 +201,7 @@ export function downloadNotebookIpynb(state: NotebookState, filename = "notebook
 
 /**
  * Clear the notebook and fill with the caffeine demo cells
- * (draw → slow infinite orbit → %%mv.demo style tour). Persists to
+ * (draw_frame+commit → orbit → style then theme tours). Persists to
  * storage and notifies open NotebookPanel instances.
  */
 export function resetToDemoNotebook(

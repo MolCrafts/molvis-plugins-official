@@ -41,7 +41,7 @@ describe("notebook model", () => {
     expect(nb.nextExec).toBe(1);
   });
 
-  it("demo notebook: caffeine draw → slow infinite orbit → %%mv.demo styles", () => {
+  it("demo notebook: caffeine draw_frame+commit → orbit → style then theme tours", () => {
     const nb = demoNotebook();
     expect(nb.cells.length).toBe(3);
     const [build, orbit, styles] = nb.cells.map((c) => c.source);
@@ -50,11 +50,12 @@ describe("notebook model", () => {
     expect(build).toContain("SmilesReader");
     expect(build).toContain("CN1C=NC2=C1C(=O)N(C(=O)N2C)C");
     expect(build).toContain(".read()");
-    expect(build).toContain("stage.draw(frame)");
+    expect(build).toContain("stage.draw_frame(frame)");
+    expect(build).toContain("stage.commit()");
     expect(build).toContain("stage.camera.fit()");
+    expect(build).not.toContain("stage.draw(frame)");
     expect(build).not.toContain("draw_atom");
     expect(build).not.toContain("draw_bond");
-    expect(build).not.toContain("print");
     expect(build).not.toContain("asyncio");
 
     expect(orbit).not.toContain("%%mv.demo");
@@ -64,16 +65,20 @@ describe("notebook model", () => {
     expect(orbit).toContain("duration=np.inf");
     expect(orbit).not.toContain("while True");
     expect(orbit).not.toContain("draw_atom");
-    expect(orbit).not.toContain("print");
     expect(orbit).not.toContain("asyncio");
 
     expect(styles).toContain("%%mv.demo");
     expect(styles).toMatch(/delay=\d+(\.\d+)?/);
     expect(styles).toContain("stage.STYLE");
     expect(styles).toContain("stage.THEME");
-    expect(styles).toContain("stage.set_style(style, theme)");
+    expect(styles).toContain("stage.set_style(style)");
+    expect(styles).toContain("stage.set_theme(theme)");
+    // set_style lives in its own loop — not nested inside THEME.
+    expect(styles).toMatch(
+      /for style in stage\.STYLE:[\s\S]*?stage\.set_style\(style\)[\s\S]*?for theme in stage\.THEME:[\s\S]*?stage\.set_theme\(theme\)/,
+    );
+    expect(styles).not.toContain("set_style(style, theme)");
     expect(styles).not.toContain("draw_atom");
-    expect(styles).not.toContain("print");
     expect(styles).not.toContain("asyncio");
   });
 
@@ -92,7 +97,10 @@ describe("notebook model", () => {
     const next = resetToDemoNotebook(storage);
     expect(next.cells.length).toBe(3);
     expect(loadNotebook(storage).cells[0].source).toContain("SmilesReader");
-    expect(loadNotebook(storage).cells[0].source).toContain("stage.draw(frame)");
+    expect(loadNotebook(storage).cells[0].source).toContain(
+      "stage.draw_frame(frame)",
+    );
+    expect(loadNotebook(storage).cells[0].source).toContain("stage.commit()");
     expect(loadNotebook(storage).cells[2].source).toContain("%%mv.demo");
   });
 

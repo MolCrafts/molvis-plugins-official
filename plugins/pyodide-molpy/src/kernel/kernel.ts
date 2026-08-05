@@ -23,42 +23,90 @@ import type {
   RunSource,
 } from "./types";
 
-type CellRunPayload = {
+export type CellRunPayload = {
   result: MimeBundle | null;
   displays: MimeBundle[];
+  /** Captured by Python (redirect) — authoritative for cell output. */
+  stdout: string;
+  stderr: string;
 };
 
-function parseCellPayload(raw: unknown): CellRunPayload {
-  if (raw == null) return { result: null, displays: [] };
+/**
+ * Normalize the value returned by ``run_user_cell_task``.
+ *
+ * Pyodide may hand back:
+ *   - a JS string (JSON)
+ *   - a PyProxy of a Python str / dict
+ *   - a plain object (after toJs)
+ *
+ * Bug that ate all ``print`` output: a PyProxy-of-str was toJs'd into a
+ * JS string, then rejected by ``typeof obj !== "object"`` → empty payload.
+ */
+export function parseCellPayload(raw: unknown): CellRunPayload {
+  const empty: CellRunPayload = {
+    result: null,
+    displays: [],
+    stdout: "",
+    stderr: "",
+  };
+  if (raw == null) return empty;
+
   let obj: unknown = raw;
-  if (typeof raw === "string") {
-    try {
-      obj = JSON.parse(raw);
-    } catch {
-      return { result: null, displays: [] };
-    }
-  } else if (typeof raw === "object" && raw !== null) {
-    // PyProxy / Map from Pyodide
-    const proxy = raw as {
+
+  // 1) Unwrap PyProxy first (Python str/dict/list).
+  if (obj !== null && typeof obj === "object") {
+    const proxy = obj as {
       toJs?: (opts?: Record<string, unknown>) => unknown;
+      toString?: () => string;
     };
     if (typeof proxy.toJs === "function") {
-      obj = proxy.toJs({
-        dict_converter: Object.fromEntries,
-        create_pyproxies: false,
-      });
+      try {
+        obj = proxy.toJs({
+          dict_converter: Object.fromEntries,
+          create_pyproxies: false,
+        });
+      } catch {
+        // Fall through — may already be usable.
+      }
     }
   }
-  if (!obj || typeof obj !== "object") {
-    return { result: null, displays: [] };
+
+  // 2) JSON string → object (native string *or* toJs of a Python str).
+  if (typeof obj === "string") {
+    const text = obj.trim();
+    if (!text) return empty;
+    try {
+      obj = JSON.parse(text);
+    } catch {
+      return empty;
+    }
   }
-  const rec = obj as { result?: MimeBundle | null; displays?: MimeBundle[] };
+
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
+    return empty;
+  }
+
+  // Map (from some toJs paths) → plain record
+  if (obj instanceof Map) {
+    obj = Object.fromEntries(obj.entries());
+  }
+
+  const rec = obj as {
+    result?: MimeBundle | null;
+    displays?: MimeBundle[];
+    stdout?: unknown;
+    stderr?: unknown;
+  };
   const result =
-    rec.result && typeof rec.result === "object" ? rec.result : null;
+    rec.result && typeof rec.result === "object" && !Array.isArray(rec.result)
+      ? rec.result
+      : null;
   const displays = Array.isArray(rec.displays)
     ? rec.displays.filter((d) => d && typeof d === "object")
     : [];
-  return { result, displays };
+  const stdout = typeof rec.stdout === "string" ? rec.stdout : "";
+  const stderr = typeof rec.stderr === "string" ? rec.stderr : "";
+  return { result, displays, stdout, stderr };
 }
 
 const PYODIDE_INDEX = PYODIDE_INDEX_URL;
@@ -98,7 +146,7 @@ async function loadPyodideFromCdn(): Promise<PyodideLike> {
 /**
  * Minimal glue: expose JS RPC + import molvis-python (InProcessTransport).
  * molvis + molpy are hard requirements — no stubs, no polyfills.
- * Viewer API: commands are methods on the stage — `stage.draw(...)`.
+ * Viewer API: commands are methods on the stage — `stage.draw_frame(...)`.
  */
 /**
  * Jupyter-compatible notebook cell runner (in-process Pyodide).
@@ -307,53 +355,123 @@ async def _exec_body(body, ns, flags):
     await _await_if_needed(eval(code, ns, ns))
 
 
+class _TeeIO:
+    """Mirror writes to the live stream and a capture buffer.
+
+    Cell output must not depend solely on Pyodide \`setStdout({batched})\`
+    (which drops newlines and can miss prints under nested run_sync).
+    """
+
+    def __init__(self, primary, capture):
+        self._primary = primary
+        self._capture = capture
+
+    def write(self, s):
+        if not s:
+            return 0
+        self._capture.write(s)
+        try:
+            return self._primary.write(s)
+        except Exception:
+            return len(s)
+
+    def flush(self):
+        try:
+            self._primary.flush()
+        except Exception:
+            pass
+        try:
+            self._capture.flush()
+        except Exception:
+            pass
+
+    def isatty(self):
+        return False
+
+    @property
+    def encoding(self):
+        return getattr(self._primary, "encoding", "utf-8")
+
+    def fileno(self):
+        return self._primary.fileno()
+
+    def writable(self):
+        return True
+
+
 async def run_user_cell(source):
-    """Run one notebook cell; return JSON {result, displays}.
+    """Run one notebook cell; return JSON {result, displays, stdout, stderr}.
 
     Last top-level expression is evaluated and formatted (IPython style).
     Statements alone produce no execute_result.
 
     Cells starting with \`\`%%mv.demo\`\` run statement-at-a-time via
     :func:\`molvis.demo.run_demo\` (inter-step delay from \`\`delay=\`\`).
+
+    \`print\` is captured into the payload so the notebook cell output
+    always shows it (independent of setStdout quirks).
     """
+    import io as _io
+    import sys as _sys
+
     _DISPLAY_PUB.clear()
     ns = _seed_user_ns()
     flags = _ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
     raw = source if source is not None else ""
 
-    # ── %%mv.demo magic: step through top-level statements ───────────
-    body_src, delay = mv.strip_demo_magic(raw)
-    if delay is not None:
-        await mv.demo(body_src, ns, delay=delay)
-        _write_user_ns(ns)
-        return json.dumps({"result": None, "displays": list(_DISPLAY_PUB)})
+    out_cap = _io.StringIO()
+    err_cap = _io.StringIO()
+    old_out, old_err = _sys.stdout, _sys.stderr
+    _sys.stdout = _TeeIO(old_out, out_cap)
+    _sys.stderr = _TeeIO(old_err, err_cap)
 
-    tree = _ast.parse(body_src, "<cell>", "exec")
-    body = tree.body
     result_bundle = None
+    try:
+        # ── %%mv.demo magic: step through top-level statements ───────────
+        body_src, delay = mv.strip_demo_magic(raw)
+        if delay is not None:
+            await mv.demo(body_src, ns, delay=delay)
+            _write_user_ns(ns)
+        else:
+            tree = _ast.parse(body_src, "<cell>", "exec")
+            body = tree.body
 
-    if not body:
-        _write_user_ns(ns)
-        return json.dumps({"result": None, "displays": []})
+            if not body:
+                _write_user_ns(ns)
+            else:
+                last = body[-1]
+                if isinstance(last, _ast.Expr):
+                    await _exec_body(body[:-1], ns, flags)
+                    expr = _ast.Expression(body=last.value)
+                    code = compile(expr, "<cell>", "eval", flags=flags)
+                    value = await _await_if_needed(eval(code, ns, ns))
+                    # IPython: _ is the last result (including None).
+                    ns["_"] = value
+                    if value is not None:
+                        result_bundle = format_mimebundle(value)
+                else:
+                    await _exec_body(body, ns, flags)
 
-    last = body[-1]
-    if isinstance(last, _ast.Expr):
-        await _exec_body(body[:-1], ns, flags)
-        expr = _ast.Expression(body=last.value)
-        code = compile(expr, "<cell>", "eval", flags=flags)
-        value = await _await_if_needed(eval(code, ns, ns))
-        # IPython: _ is the last result (including None).
-        ns["_"] = value
-        if value is not None:
-            result_bundle = format_mimebundle(value)
-    else:
-        await _exec_body(body, ns, flags)
+                _write_user_ns(ns)
+    finally:
+        try:
+            _sys.stdout.flush()
+            _sys.stderr.flush()
+        except Exception:
+            pass
+        _sys.stdout = old_out
+        _sys.stderr = old_err
 
-    _write_user_ns(ns)
-    return json.dumps({
+    # Return a plain dict (not json.dumps). Pyodide converts it to a JS
+    # object via toJs; a JSON *string* used to be discarded by parseCellPayload
+    # when it arrived as a PyProxy-of-str (typeof after toJs === "string"
+    # failed the object check → empty stdout forever).
+    return {
         "result": result_bundle,
         "displays": list(_DISPLAY_PUB),
-    })
+        "stdout": out_cap.getvalue(),
+        "stderr": err_cap.getvalue(),
+    }
 
 
 _MOLVIS_CURRENT_CELL_TASK = None
@@ -373,9 +491,26 @@ def cancel_user_cell():
 
     Invoked from JS on the Interrupt button (must be sync and re-entrant —
     never schedule a second runPythonAsync while the cell is running).
+
+    Sets molvis.interrupt so cooperative check() sites (demo delays,
+    send_cmd) stop even when the current await is still finishing an RPC.
+    The JS host also raises a pure-JS latch first; this path mirrors it
+    into Python and cancels the asyncio task when re-entry is possible.
     """
     global _MOLVIS_INTERRUPT, _MOLVIS_CURRENT_CELL_TASK
     _MOLVIS_INTERRUPT = True
+    try:
+        import molvis_kernel_ctl as _ctl
+
+        _ctl.request_interrupt()
+    except Exception:
+        pass
+    try:
+        import molvis.interrupt as _mi
+
+        _mi.request()
+    except Exception:
+        pass
     _stop_background_stage_work()
     task = _MOLVIS_CURRENT_CELL_TASK
     if task is None or task.done():
@@ -387,6 +522,18 @@ def cancel_user_cell():
 def _clear_interrupt_flag():
     global _MOLVIS_INTERRUPT
     _MOLVIS_INTERRUPT = False
+    try:
+        import molvis_kernel_ctl as _ctl
+
+        _ctl.clear_interrupt()
+    except Exception:
+        pass
+    try:
+        import molvis.interrupt as _mi
+
+        _mi.clear()
+    except Exception:
+        pass
 
 
 def _soft_sigint(_signum, _frame):
@@ -422,6 +569,14 @@ async def run_user_cell_task(source):
     except KeyboardInterrupt as exc:
         # If SIGINT still leaked into the cell task, rethrow as cancel.
         raise _asyncio.CancelledError("Interrupted by user") from exc
+    except BaseException as exc:
+        # molvis.interrupt.InterruptRequested and similar cooperative stops.
+        name = type(exc).__name__
+        if name in ("InterruptRequested", "InterruptedError") or "Interrupted" in str(
+            exc
+        ):
+            raise _asyncio.CancelledError("Interrupted by user") from exc
+        raise
     finally:
         _MOLVIS_CURRENT_CELL_TASK = None
         _clear_interrupt_flag()
@@ -450,6 +605,12 @@ export class PyodideKernel {
   private scripts: Record<string, string> = {};
   private rpc: RpcClient | null = null;
   private interruptBuffer: Uint8Array | null = null;
+  /**
+   * Pure-JS interrupt latch. Python ``molvis.interrupt.check`` polls this
+   * via ``molvis_kernel_ctl.is_interrupt_requested`` — it must **not**
+   * require re-entering Python while the cell is blocked in ``run_sync``.
+   */
+  private interruptRequested = false;
   /**
    * Sync Python cancel_user_cell, registered during bootstrap.
    * Called from the Interrupt button without a second runPythonAsync
@@ -493,15 +654,25 @@ export class PyodideKernel {
       },
     });
     // Kernel control surface: Python bootstrap registers cancel_user_cell here.
+    // Also exposes a pure-JS interrupt latch that Python can poll without
+    // waiting for a re-entrant cancel_user_cell call during run_sync.
     this.pyodide.registerJsModule("molvis_kernel_ctl", {
       register_cancel: (fn: unknown) => {
         this.cellCancel = () => invokePyCancel(fn);
       },
+      request_interrupt: () => {
+        this.interruptRequested = true;
+      },
+      clear_interrupt: () => {
+        this.interruptRequested = false;
+      },
+      is_interrupt_requested: () => this.interruptRequested,
     });
   }
 
   private clearInterruptSignal(): void {
     if (this.interruptBuffer) this.interruptBuffer[0] = 0;
+    this.interruptRequested = false;
   }
 
   getStatus(): KernelStatus {
@@ -682,27 +853,33 @@ _MOLVIS_SCRIPTS = __import__("json").loads(${JSON.stringify(payload)})
     let stdout = "";
     let stderr = "";
 
+    // Prefer a write handler so newlines survive (batched strips them).
+    // Cell UI still prefers Python-captured stdout from the payload.
+    const onOut = (s: string) => {
+      if (!s) return;
+      stdout += s.endsWith("\n") || s.includes("\n") ? s : `${s}\n`;
+      this.pushLog({
+        source,
+        stream: "stdout",
+        text: s,
+        cellId: meta?.cellId,
+      });
+    };
+    const onErr = (s: string) => {
+      if (!s) return;
+      stderr += s.endsWith("\n") || s.includes("\n") ? s : `${s}\n`;
+      this.pushLog({
+        source,
+        stream: "stderr",
+        text: s,
+        cellId: meta?.cellId,
+      });
+    };
     this.pyodide.setStdout({
-      batched: (s) => {
-        stdout += s;
-        this.pushLog({
-          source,
-          stream: "stdout",
-          text: s,
-          cellId: meta?.cellId,
-        });
-      },
+      batched: onOut,
     });
     this.pyodide.setStderr({
-      batched: (s) => {
-        stderr += s;
-        this.pushLog({
-          source,
-          stream: "stderr",
-          text: s,
-          cellId: meta?.cellId,
-        });
-      },
+      batched: onErr,
     });
 
     try {
@@ -716,10 +893,13 @@ _MOLVIS_SCRIPTS = __import__("json").loads(${JSON.stringify(payload)})
       const payload = parseCellPayload(raw);
       this.setStatus("ready");
       const resultText = payload.result?.["text/plain"];
+      // Prefer in-cell Python capture (authoritative for print).
+      const cellStdout = payload.stdout || stdout;
+      const cellStderr = payload.stderr || stderr;
       return {
         ok: true,
-        stdout,
-        stderr,
+        stdout: cellStdout,
+        stderr: cellStderr,
         data: payload.result ?? undefined,
         displays: payload.displays.length ? payload.displays : undefined,
         resultText,
@@ -760,8 +940,15 @@ _MOLVIS_SCRIPTS = __import__("json").loads(${JSON.stringify(payload)})
    * Do **not** write SIGINT (2) into the interrupt buffer on main-thread
    * Pyodide: that raises KeyboardInterrupt inside webloop callbacks
    * (run_handle / call_later) and floods the console with uncaught
-   * PythonError. Async cells stop via asyncio.Task.cancel; background
-   * camera orbits via stage.camera.stop_track.
+   * PythonError.
+   *
+   * Order matters:
+   *   1. Raise the **pure-JS** latch first so Python ``check()`` can see it
+   *      from inside ``run_sync`` poll loops without re-entering Python.
+   *   2. Best-effort re-entrant ``cancel_user_cell`` (task.cancel +
+   *      ``molvis.interrupt.request`` + camera.stop_track).
+   *   3. Never clear the JS latch here — ``run()`` / bootstrap clear it at
+   *      the start of the next cell.
    */
   interrupt(): void {
     const busy = this.runLock;
@@ -771,8 +958,10 @@ _MOLVIS_SCRIPTS = __import__("json").loads(${JSON.stringify(payload)})
       text: busy ? "Stopping current cell…" : "Stopping background work…",
     });
 
-    // Always clear any leftover SIGINT so webloop stops raising.
-    this.clearInterruptSignal();
+    // Pure-JS latch FIRST — works even when Python re-entry is blocked.
+    this.interruptRequested = true;
+    // Drop any leftover SIGINT so webloop does not raise mid-cancel.
+    if (this.interruptBuffer) this.interruptBuffer[0] = 0;
 
     let cancelled = false;
     try {
@@ -798,8 +987,6 @@ _MOLVIS_SCRIPTS = __import__("json").loads(${JSON.stringify(payload)})
           text: `Stop failed: ${message}`,
         });
       }
-    } finally {
-      this.clearInterruptSignal();
     }
 
     if (!busy && !cancelled) {
@@ -834,7 +1021,7 @@ _MOLVIS_SCRIPTS = __import__("json").loads(${JSON.stringify(payload)})
 
 /** True when a thrown message indicates user interrupt / task cancel. */
 export function isInterruptError(message: string): boolean {
-  return /CancelledError|KeyboardInterrupt|Interrupted by user|Execution stopped/i.test(
+  return /CancelledError|KeyboardInterrupt|InterruptRequested|Interrupted by user|InterruptedError|Execution stopped/i.test(
     message,
   );
 }
