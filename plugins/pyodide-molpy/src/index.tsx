@@ -5,7 +5,7 @@
  * (same JSON-RPC catalog as WebSocket). No hard-coded camera/scene bridge.
  */
 
-import { getKernel } from "./kernel/kernel";
+import { getKernel } from "./kernel";
 import { EDITOR_SETTINGS_KEY } from "./model/editor_settings";
 import {
   NOTEBOOK_STORAGE_KEY,

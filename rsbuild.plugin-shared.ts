@@ -67,6 +67,14 @@ export function createPluginRsbuildConfig(
           ...pluginExternals,
           ...extraExternals,
         },
+        module: {
+          rules: [
+            {
+              test: /\.whl$/,
+              type: "asset/resource",
+            },
+          ],
+        },
       },
     },
     performance: {

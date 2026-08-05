@@ -1,11 +1,11 @@
 import { useCallback, useSyncExternalStore } from "react";
-import { getKernel } from "../../kernel/kernel";
+import { getKernel } from "../../kernel";
 import type {
   KernelLogLine,
   KernelStatus,
   RunResult,
   RunSource,
-} from "../../kernel/types";
+} from "../../kernel";
 
 export function useKernel() {
   const kernel = getKernel();
