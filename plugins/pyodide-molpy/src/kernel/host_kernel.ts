@@ -7,17 +7,27 @@
  */
 
 import type { KernelMessage } from "@jupyterlab/services";
-// Deep import avoids `_pypi.js` re-exporting binary .whl as JS modules
-// (rspack cannot parse wheel zip bytes).
+// Deep import + rsbuild replacement of `_pypi.js` → stub (no binary .whl).
 import { PyodideKernel } from "@jupyterlite/pyodide-kernel/lib/kernel.js";
 
-import { MICROPIP_REQUIREMENTS, PYODIDE_INDEX_URL } from "../cdn";
+import {
+  MICROPIP_REQUIREMENTS,
+  PYODIDE_INDEX_URL,
+  PYODIDE_VERSION,
+} from "../cdn";
 import type { RpcClient } from "../rpc/client";
 import { createRpcClient } from "../rpc/client";
-import { BOOTSTRAP_PY } from "./bootstrap";
+import { rpcFailure, rpcSuccess } from "../rpc/envelope";
+import { BOOTSTRAP_STAGES } from "./bootstrap";
+import { isInterruptError } from "./errors";
 import { LOCAL_PY_ROOT, LOCAL_PY_SOURCES } from "./local_py_sources";
 import { MemoryContentsManager } from "./memory_contents";
-import { isInterruptError } from "./errors";
+import {
+  PIPLITE_INDEX,
+  PIPLITE_WHEEL,
+  pluginAssetUrl,
+  sameOriginWorkerUrl,
+} from "./runtime_assets";
 import type {
   KernelListener,
   KernelLogLine,
@@ -32,33 +42,87 @@ export { isInterruptError } from "./errors";
 const PYODIDE_JS = `${PYODIDE_INDEX_URL}pyodide.mjs`;
 const PYODIDE_LOCK = `${PYODIDE_INDEX_URL}pyodide-lock.json`;
 
+/** Same-origin worker URL, prefetched by `HostKernel.start` (initWorker is sync). */
+let pendingWorkerUrl: string | null = null;
+
+type KernelInternals = {
+  _worker: Worker;
+  _remoteKernel: {
+    execute: (
+      content: KernelMessage.IExecuteRequestMsg["content"],
+      parent: unknown,
+    ) => Promise<Record<string, unknown> | null | undefined>;
+  };
+  _parent?: KernelMessage.IMessage;
+  _parentHeader?: KernelMessage.IHeader;
+};
+
 /**
- * Assets co-located with plugin.js (local `dist/` or GitHub Release root).
- * Release assets are **flat** (`pypi-all.json`); local build uses the same
- * flat names via `copy-kernel-workers.mjs`.
+ * MolVis runs the kernel on `@jupyterlite/pyodide-kernel`'s **coincident**
+ * worker, which requires the host page to be cross-origin isolated.
+ *
+ * The alternative (comlink, used by upstream when COI is unavailable) cannot
+ * execute cells at all here: `PyodideRemoteKernel.execute()` assigns
+ * stream/display callbacks across the boundary and Comlink cannot
+ * structured-clone a function — every cell dies with `DataCloneError` /
+ * `Unserializable return value`. Serve MolVis with COOP + COEP; there is no
+ * degraded mode to fall back to.
  */
-function assetUrl(name: string): string {
-  return new URL(`./${name.replace(/^\.\//, "")}`, import.meta.url).href;
-}
+const KERNEL_WORKER = "coincident.worker.js";
 
-function workerUrl(name: "comlink.worker.js" | "coincident.worker.js"): URL {
-  return new URL(`./${name}`, import.meta.url);
-}
-
-/** Subclass so worker URLs resolve next to our plugin bundle. */
 class MolvisPyodideKernel extends PyodideKernel {
   protected initWorker(_options: PyodideKernel.IOptions): Worker {
-    const name =
-      typeof crossOriginIsolated !== "undefined" && crossOriginIsolated
-        ? "coincident.worker.js"
-        : "comlink.worker.js";
-    const url = workerUrl(name);
+    const url = pendingWorkerUrl;
+    pendingWorkerUrl = null;
+    if (!url) {
+      throw new Error(
+        "Kernel worker URL not prepared — HostKernel.start must prefetch it",
+      );
+    }
     const worker = new Worker(url, { type: "module" });
-    // Molvis Stage RPC: worker Python posts {type:"molvis_rpc"} → host.
     worker.addEventListener("message", (ev) => {
       void this._onWorkerRpc(ev);
     });
     return worker;
+  }
+
+  /** Only flat sibling URLs (not webpack `/static/assets/…`). */
+  initRemoteOptions(options: PyodideKernel.IOptions) {
+    const remote = super.initRemoteOptions(options);
+    return {
+      ...remote,
+      pipliteWheelUrl: options.pipliteWheelUrl ?? remote.pipliteWheelUrl,
+      pipliteUrls: options.pipliteUrls ? [...options.pipliteUrls] : [],
+    };
+  }
+
+  async executeRequest(
+    content: KernelMessage.IExecuteRequestMsg["content"],
+  ): Promise<KernelMessage.IExecuteReplyMsg["content"]> {
+    await this.ready;
+    const self = this as unknown as KernelInternals;
+    // Direct executeRequest (not handleMessage) leaves parent unset.
+    if (!self._parent) {
+      const parent = syntheticExecuteParent(this.id, content);
+      self._parent = parent;
+      self._parentHeader = parent.header;
+    }
+    const exec = self._remoteKernel?.execute;
+    if (typeof exec !== "function") {
+      throw new Error(
+        "Kernel remote.execute is missing — the worker never bound its RPC.",
+      );
+    }
+    const result = await exec.call(self._remoteKernel, content, self._parent);
+    if (result == null || typeof result !== "object") {
+      throw new Error(
+        `Kernel worker returned no execute result (${String(result)}). ` +
+          "Worker RPC failed — open DevTools → Worker console for details.",
+      );
+    }
+    result.execution_count = this.executionCount;
+    // Worker RPC is untyped at the wire; the shape is validated above.
+    return result as unknown as KernelMessage.IExecuteReplyMsg["content"];
   }
 
   private _rpcHandler:
@@ -77,34 +141,70 @@ class MolvisPyodideKernel extends PyodideKernel {
   private async _onWorkerRpc(ev: MessageEvent): Promise<void> {
     const data = ev.data;
     if (!data || typeof data !== "object") return;
+    // Must not collide with Comlink frames (numeric `type` / path arrays).
     if ((data as { type?: string }).type !== "molvis_rpc") return;
     const { id, method, params } = data as {
       id: string;
       method: string;
       params?: Record<string, unknown>;
     };
-    const worker = (this as unknown as { _worker?: Worker })._worker;
+    const worker = (this as unknown as KernelInternals)._worker;
     if (!worker) return;
     try {
       if (!this._rpcHandler) {
         throw new Error("molvis RPC handler not bound (app not ready)");
       }
       const payload = await this._rpcHandler(method, params ?? {});
-      worker.postMessage({
-        type: "molvis_rpc_reply",
-        id,
-        ok: true,
-        payload,
-      });
+      worker.postMessage(rpcSuccess(id, payload));
     } catch (err) {
-      worker.postMessage({
-        type: "molvis_rpc_reply",
-        id,
-        ok: false,
-        error: err instanceof Error ? err.message : String(err),
-      });
+      worker.postMessage(rpcFailure(id, err));
     }
   }
+}
+
+function syntheticExecuteParent(
+  session: string,
+  content: KernelMessage.IExecuteRequestMsg["content"],
+): KernelMessage.IExecuteRequestMsg {
+  const header = {
+    msg_id: crypto.randomUUID(),
+    session,
+    username: "molvis",
+    date: new Date().toISOString(),
+    msg_type: "execute_request" as const,
+    version: "5.3",
+  };
+  return {
+    header,
+    parent_header: {},
+    metadata: {},
+    content,
+    channel: "shell",
+    buffers: [],
+  } as KernelMessage.IExecuteRequestMsg;
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => {
+      reject(
+        new Error(
+          `${label} timed out after ${Math.round(ms / 1000)}s. ` +
+            "Check network (Pyodide CDN) and DevTools → Worker console.",
+        ),
+      );
+    }, ms);
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      },
+    );
+  });
 }
 
 function asMimeBundle(data: unknown): MimeBundle | undefined {
@@ -149,23 +249,6 @@ export class HostKernel {
         return this.rpc.call(method, params);
       });
     }
-  }
-
-  /** @deprecated use setApp */
-  setBridge(bridge: { call: RpcClient["call"]; app?: unknown } | null): void {
-    if (!bridge) {
-      this.rpc = null;
-      return;
-    }
-    if ("app" in bridge && bridge.app) {
-      this.setApp(bridge.app);
-      return;
-    }
-    this.rpc = {
-      app: null,
-      call: (method, params) =>
-        Promise.resolve(bridge.call(method, params ?? {})),
-    };
   }
 
   getStatus(): KernelStatus {
@@ -242,6 +325,18 @@ export class HostKernel {
       await this.waitUntilReady();
       return;
     }
+    if (!globalThis.crossOriginIsolated) {
+      // Fail here rather than a few seconds later on every cell: see the
+      // comment on KERNEL_WORKER.
+      const message =
+        "Python needs a cross-origin isolated page. Serve MolVis with " +
+        "Cross-Origin-Opener-Policy: same-origin and " +
+        "Cross-Origin-Embedder-Policy: require-corp.";
+      this.lastError = message;
+      this.setStatus("error");
+      this.pushLog({ source: "system", stream: "stderr", text: message });
+      throw new Error(message);
+    }
     this.setStatus("loading");
     this.lastError = null;
     this.pushLog({
@@ -257,19 +352,37 @@ export class HostKernel {
         this.onKernelMessage(msg);
       };
 
+      const pipliteWheel = pluginAssetUrl(PIPLITE_WHEEL);
+      const pipliteIndex = pluginAssetUrl(PIPLITE_INDEX);
+      const workerRemote = pluginAssetUrl(KERNEL_WORKER);
+
+      this.pushLog({
+        source: "system",
+        stream: "info",
+        text: `Fetching worker ${workerRemote}…`,
+      });
+      pendingWorkerUrl = await sameOriginWorkerUrl(workerRemote);
+
+      this.pushLog({
+        source: "system",
+        stream: "info",
+        text: `Loading Pyodide ${PYODIDE_VERSION} (first run downloads ~few MB)…`,
+      });
+
       const kernel = new MolvisPyodideKernel({
         id: `molvis-${Math.random().toString(36).slice(2, 10)}`,
         name: "python",
         location: "",
         sendMessage,
         pyodideUrl: PYODIDE_JS,
-        pipliteWheelUrl: assetUrl("piplite-0.8.2-py3-none-any.whl"),
-        pipliteUrls: [assetUrl("all.json")],
+        pipliteWheelUrl: pipliteWheel,
+        pipliteUrls: [pipliteIndex],
         disablePyPIFallback: false,
         mountDrive: false,
         loadPyodideOptions: {
           lockFileURL: PYODIDE_LOCK,
-          packages: ["micropip", "numpy"],
+          // Keep first paint light — numpy comes via micropip later if needed.
+          packages: ["micropip"],
         },
         contentsManager: this.contents,
       } as unknown as PyodideKernel.IOptions);
@@ -284,15 +397,14 @@ export class HostKernel {
       }
 
       this.kernel = kernel;
-      await kernel.ready;
+      await withTimeout(kernel.ready, 180_000, "Pyodide worker initialize");
 
       this.pushLog({
         source: "system",
         stream: "info",
-        text: "Kernel worker ready · installing packages + molvis…",
+        text: "Worker ready · writing local packages…",
       });
 
-      // Write monorepo pack into the worker FS under LOCAL_PY_ROOT.
       await this.executeSilent(
         `
 import pathlib
@@ -320,15 +432,38 @@ for rel, body in files.items():
         );
       }
 
-      await this.executeSilent(
-        `
+      this.pushLog({
+        source: "system",
+        stream: "info",
+        text: `micropip install ${MICROPIP_REQUIREMENTS.join(", ")}…`,
+      });
+      await withTimeout(
+        this.executeSilent(
+          `
 import micropip
 await micropip.install(${JSON.stringify([...MICROPIP_REQUIREMENTS])}, keep_going=True)
 `,
-        "system",
+          "system",
+        ),
+        180_000,
+        "micropip install",
       );
 
-      await this.executeSilent(BOOTSTRAP_PY, "system");
+      this.pushLog({
+        source: "system",
+        stream: "info",
+        text: "Running molvis bootstrap…",
+      });
+      // One execution per stage: a traceback then names the stage that broke.
+      for (const stage of BOOTSTRAP_STAGES) {
+        const reply = await this.executeSilent(stage.source, "system");
+        if (reply.status === "error") {
+          throw new Error(
+            `bootstrap stage '${stage.label}' failed: ` +
+              `${reply.ename ?? "Error"}: ${reply.evalue ?? ""}`,
+          );
+        }
+      }
       this.bootstrapped = true;
 
       if (Object.keys(this.scripts).length) {
@@ -339,7 +474,7 @@ await micropip.install(${JSON.stringify([...MICROPIP_REQUIREMENTS])}, keep_going
       this.pushLog({
         source: "system",
         stream: "info",
-        text: "Pyodide kernel ready (JupyterLite worker).",
+        text: "Pyodide kernel ready.",
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
