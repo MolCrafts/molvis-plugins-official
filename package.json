@@ -3,6 +3,7 @@
   "version": "0.4.0",
   "private": true,
   "type": "module",
+  "sideEffects": false,
   "description": "Official MolVis plugin collection meta. Version MAJOR.MINOR.PATCH: major=plugin system, minor=plugin count (4), patch=fixes. Children keep independent versions.",
   "license": "BSD-3-Clause",
   "repository": {
@@ -38,7 +39,8 @@
     "prepublishOnly": "npm run check",
     "prepare:release": "node scripts/prepare-release-assets.mjs",
     "lint:py": "F=0; for w in plugins/*; do npm run --prefix \"$w\" --if-present lint:py || F=1; done; exit $F",
-    "verify:bundle": "F=0; for d in . plugins/*; do [ -f \"$d/dist/plugin.js\" ] && node --check \"$d/dist/plugin.js\" || { echo \"bad bundle: $d\"; F=1; }; done; exit $F"
+    "verify:bundle": "F=0; for d in . plugins/*; do [ -f \"$d/dist/plugin.js\" ] && node --check \"$d/dist/plugin.js\" || { echo \"bad bundle: $d\"; F=1; }; done; exit $F",
+    "doctor": "RSDOCTOR=true npm run build:self"
   },
   "peerDependencies": {
     "@molcrafts/molplot": ">=0.1.0",
@@ -53,6 +55,7 @@
     "@molcrafts/molvis-core": "^0.1.1",
     "@rsbuild/core": "^2.1.9",
     "@rsbuild/plugin-react": "^2.1.0",
+    "@rsdoctor/rspack-plugin": "^1.6.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "react": "^19.2.8",

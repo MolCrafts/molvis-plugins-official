@@ -3,6 +3,9 @@
   "version": "0.1.2",
   "private": true,
   "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
   "description": "MolVis Edit panel plugin for building carbon nanotubes",
   "license": "BSD-3-Clause",
   "scripts": {

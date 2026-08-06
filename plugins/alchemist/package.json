@@ -3,6 +3,9 @@
   "version": "0.2.0",
   "private": true,
   "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
   "description": "Alchemist \u2014 a canvas chemistry merge game: MolVis page plugin with static-site deployment",
   "license": "BSD-3-Clause",
   "repository": {
