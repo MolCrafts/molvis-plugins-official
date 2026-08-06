@@ -3,22 +3,13 @@
 Runs after ``rpc_bridge.py`` in the same interpreter, as a separate kernel
 execution so a failure here is attributed to this stage rather than to one
 130-line blob.
+
+``molpy`` / ``molvis`` are installed into the Pyodide site-packages by
+micropip from PyPI, pinned in ``src/cdn.ts`` — no ``sys.path`` hacks and no
+vendored wheels.
 """
 
-import pathlib
-import sys
-
-# ── Local monorepo pack (host writes it into the worker FS) ─────────────
-_LOCAL = pathlib.Path("/home/pyodide/packages")
-if _LOCAL.is_dir() and str(_LOCAL) not in sys.path:
-    sys.path.insert(0, str(_LOCAL))
-
-# Prefer the local pack over anything installed earlier.
-for _name in list(sys.modules):
-    if _name in ("molpy", "molvis") or _name.startswith(("molpy.", "molvis.")):
-        del sys.modules[_name]
-
-import molvis as mv  # noqa: E402  (must follow the sys.path/sys.modules fix-up)
+import molvis as mv
 
 stage = mv.Stage.from_inprocess(invoke, name="default", gui=True)
 

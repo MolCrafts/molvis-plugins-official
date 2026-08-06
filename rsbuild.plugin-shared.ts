@@ -41,16 +41,19 @@ export function jupyterLiteRuntimeCopyPatterns(): Array<{
   );
   const patterns: Array<{ from: string; to: string }> = [];
 
-  for (const name of ["comlink.worker.js", "coincident.worker.js"]) {
-    const from = join(pkgRoot, "lib", name);
-    if (fs.existsSync(from)) {
-      patterns.push({ from, to: name });
-    }
-    const map = `${from}.map`;
-    if (fs.existsSync(map)) {
-      patterns.push({ from: map, to: `${name}.map` });
-    }
+  // Only the coincident worker. Upstream also ships `comlink.worker.js` for
+  // pages that are not cross-origin isolated, but it cannot execute a single
+  // cell here (see KERNEL_WORKER in host_kernel.ts: Comlink cannot
+  // structured-clone the stream/display callbacks), so shipping it was 183 kB
+  // of unreachable code in every Release. Sourcemaps are excluded for the
+  // same reason — they were another ~1.2 MB nothing loads.
+  const worker = join(pkgRoot, "lib", "coincident.worker.js");
+  if (!fs.existsSync(worker)) {
+    throw new Error(
+      `@jupyterlite/pyodide-kernel is missing coincident.worker.js at ${worker}`,
+    );
   }
+  patterns.push({ from: worker, to: "coincident.worker.js" });
 
   const pypiDir = join(pkgRoot, "pypi");
   if (fs.existsSync(pypiDir)) {
@@ -192,7 +195,9 @@ export function createPluginRsbuildConfig(
       cleanDistPath: !isDev,
       injectStyles,
       ...(kernelRuntime
-        ? { copy: jupyterLiteRuntimeCopyPatterns() }
+        ? {
+            copy: jupyterLiteRuntimeCopyPatterns(),
+          }
         : {}),
     },
     html: {

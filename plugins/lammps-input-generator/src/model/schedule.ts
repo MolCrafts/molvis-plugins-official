@@ -57,20 +57,9 @@ export function lerpSchedule(
   t: number,
 ): SchedulePoint[] {
   const u = Math.min(1, Math.max(0, t));
-  const n = Math.max(from.length, to.length, 1);
-  const out: SchedulePoint[] = [];
-  for (let i = 0; i < n; i++) {
-    const a = from[Math.min(i, from.length - 1)] ?? { x: 0, y: 0 };
-    const b = to[Math.min(i, to.length - 1)] ?? { x: 0, y: 0 };
-    // When lengths differ, pad by holding the last sample then blend coords.
-    const fa = i < from.length ? from[i] : a;
-    const fb = i < to.length ? to[i] : b;
-    out.push({
-      x: fa.x + (fb.x - fa.x) * u,
-      y: fa.y + (fb.y - fa.y) * u,
-    });
-  }
-  // Prefer exact target length once settled
+  // Result length follows the longer series, padding the shorter one by
+  // holding its last sample. (A first loop used to build a full `out` array
+  // that every return path below then ignored — dead work, removed.)
   if (u >= 1) return to.map((p) => ({ ...p }));
   if (to.length >= from.length) {
     return to.map((b, i) => {

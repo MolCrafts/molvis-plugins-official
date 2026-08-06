@@ -7,10 +7,9 @@
   "description": "MolVis plugin: JupyterLite pyodide-kernel + molpy notebook",
   "license": "BSD-3-Clause",
   "scripts": {
-    "prebuild": "npm run pack:local-py && npm run pack:py && npm run pack:notebooks",
-    "pretypecheck": "npm run pack:local-py && npm run pack:py && npm run pack:notebooks",
-    "pretest": "npm run pack:local-py && npm run pack:py && npm run pack:notebooks",
-    "pack:local-py": "node scripts/pack-local-py.mjs",
+    "prebuild": "npm run pack:py && npm run pack:notebooks",
+    "pretypecheck": "npm run pack:py && npm run pack:notebooks",
+    "pretest": "npm run pack:py && npm run pack:notebooks",
     "build": "tsc --noEmit && rsbuild build",
     "typecheck": "tsc --noEmit",
     "test": "rstest run",

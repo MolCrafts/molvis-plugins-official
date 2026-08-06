@@ -208,17 +208,6 @@ export class MemoryContentsManager implements Contents.IManager {
     /* no-op */
   }
 
-  /** Seed many text files (local monorepo pack). */
-  async seedTextFiles(files: Record<string, string>): Promise<void> {
-    for (const [rel, content] of Object.entries(files)) {
-      await this.save(rel, {
-        type: "file",
-        format: "text",
-        content,
-      });
-    }
-  }
-
   private toModel(
     path: string,
     entry: FileEntry,

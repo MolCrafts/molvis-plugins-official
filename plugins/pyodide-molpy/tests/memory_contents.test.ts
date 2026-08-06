@@ -16,10 +16,8 @@ describe("MemoryContentsManager", () => {
 
   it("lists directory children", async () => {
     const c = new MemoryContentsManager();
-    await c.seedTextFiles({
-      "pkg/a.py": "a",
-      "pkg/b.py": "b",
-    });
+    await c.save("pkg/a.py", { type: "file", format: "text", content: "a" });
+    await c.save("pkg/b.py", { type: "file", format: "text", content: "b" });
     const dir = await c.get("pkg");
     expect(dir.type).toBe("directory");
     const names = (dir.content as { name: string }[]).map((x) => x.name).sort();

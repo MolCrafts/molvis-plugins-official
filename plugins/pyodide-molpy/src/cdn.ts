@@ -32,7 +32,19 @@ export const SHIKI_ESM_URL = `${JSDELIVR_NPM}/shiki@${SHIKI_VERSION}/+esm`;
  * particular has had breaking changes within 0.0.x patch releases.
  */
 export const MICROPIP_REQUIREMENTS = [
-  "molcrafts-molrs",
-  "molcrafts-mollog",
-  "molcrafts-molcfg",
+  // Every entry carries `==`. The four above used to be unpinned in the same
+  // breath as the docstring warning that molrs breaks within 0.0.x patches —
+  // so an upstream release could change the runtime under an already
+  // published bundle. `check:micropip-pins` asserts the `==` now.
+  "numpy==2.5.1",
+  "molcrafts-molrs==0.12.2",
+  "molcrafts-mollog==1.2.2",
+  "molcrafts-molcfg==1.4.2",
+  // molpy and molvis used to ship as wheels committed under `wheels/`, built
+  // from sibling checkouts by a script. The committed molpy wheel was a
+  // byte-copy of the PyPI release, the directory was untracked so a fresh
+  // clone could not build, and CI had no molpy checkout to rebuild from — so
+  // a stale wheel was undetectable.
+  "molcrafts-molpy==0.12.2",
+  "molcrafts-molvis==0.2.0",
 ] as const;

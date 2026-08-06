@@ -73,22 +73,6 @@ export function loadNotebook(
     if (!Array.isArray(parsed.cells) || parsed.cells.length === 0) {
       return defaultNotebook();
     }
-    // Migrate the old, ambiguous statements-per-second demo option to the
-    // explicit seconds-per-step spelling while preserving its timing.
-    parsed.cells = parsed.cells.map((cell) => ({
-      ...cell,
-      source: cell.source.replace(
-        /^(\s*%%mv\.demo\s+)rate=([0-9]*\.?[0-9]+)(.*)$/m,
-        (_line, prefix: string, value: string, suffix: string) => {
-          const rate = Number(value);
-          return `${prefix}delay=${rate > 0 ? 1 / rate : 0}${suffix}`;
-        },
-      ),
-    }));
-    parsed.cells = parsed.cells.map((cell) => ({
-      ...cell,
-      source: cell.source.replace(/^(\s*%%mv\.demo\s+)step_delay=/m, "$1delay="),
-    }));
     return parsed;
   } catch {
     return defaultNotebook();

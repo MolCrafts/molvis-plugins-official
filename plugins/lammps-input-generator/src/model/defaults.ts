@@ -84,8 +84,6 @@ export function defaultInit(units: LammpsUnits = DEFAULT_UNITS): InitConfig {
       one: 2000,
       binsize: 0,
     },
-    neighborSkin: u.neighborSkin,
-    neighborCheck: true,
     forceField: defaultForceField(),
   };
 }
@@ -102,7 +100,6 @@ export function withUnits(init: InitConfig, units: LammpsUnits): InitConfig {
     units,
     timestep: u.timestep,
     neighbor: { ...(init.neighbor ?? defaultInit(units).neighbor!), skin: u.neighborSkin },
-    neighborSkin: u.neighborSkin,
   };
 }
 
@@ -199,8 +196,6 @@ export function normalizeConfig(raw: unknown): LammpsEqConfig | null {
   if (!raw || typeof raw !== "object") return null;
   const parsed = raw as LammpsEqConfig & {
     init?: InitConfig & {
-      neighborSkin?: number;
-      neighborCheck?: boolean;
       forceField?: ForceFieldPlaceholders & {
         extraLines?: string;
         includeCommentedStubs?: boolean;
@@ -238,11 +233,7 @@ export function normalizeConfig(raw: unknown): LammpsEqConfig | null {
     ...parsed,
     init: {
       ...parsed.init,
-      neighbor: parsed.init.neighbor ?? {
-        ...defaultInit(parsed.init.units).neighbor!,
-        skin: parsed.init.neighborSkin ?? unitDefaults(parsed.init.units).neighborSkin,
-        check: parsed.init.neighborCheck ?? true,
-      },
+      neighbor: parsed.init.neighbor ?? defaultInit(parsed.init.units).neighbor!,
       forceField: { lines: lines.length > 0 ? lines : defaultForceField().lines },
     },
     // Drafts saved before langevinSeed existed share one hardcoded seed at

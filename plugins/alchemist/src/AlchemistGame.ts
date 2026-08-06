@@ -24,7 +24,12 @@ import {
   type StorageAdapter,
 } from "./storage";
 
-const BOARD_WIDTH = 336;
+/**
+ * Playfield width. Exported because `model.test.ts` asserts that two
+ * second-largest atoms fit side by side — the invariant that keeps the final
+ * merge reachable — and a copied literal would keep passing after a resize.
+ */
+export const BOARD_WIDTH = 336;
 const BOARD_HEIGHT = 496;
 const DANGER_Y = 77;
 const DANGER_LIMIT_SECONDS = 1.75;

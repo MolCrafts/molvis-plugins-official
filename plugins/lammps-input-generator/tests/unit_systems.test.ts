@@ -17,14 +17,19 @@ describe("unit-system defaults", () => {
   });
 
   it("re-derives timestep and skin when the unit system changes", () => {
+    // `real` and `metal` happen to share a 2.0 skin, so switching between
+    // them cannot show whether the skin was re-derived or merely carried
+    // over. `nano` (10.0) is the pair that makes this assertion bite.
     const real = defaultInit("real");
-    const metal = withUnits(real, "metal");
-    expect(metal.units).toBe("metal");
-    expect(metal.timestep).toBe(0.001);
-    expect(metal.neighborSkin).toBe(2.0);
+    expect(real.neighbor?.skin).toBe(2.0);
+
+    const nano = withUnits(real, "nano");
+    expect(nano.units).toBe("nano");
+    expect(nano.timestep).toBe(0.00045);
+    expect(nano.neighbor?.skin).toBe(10.0);
     // Unit-independent fields survive the switch.
-    expect(metal.dataFile).toBe(real.dataFile);
-    expect(metal.atomStyle).toBe(real.atomStyle);
+    expect(nano.dataFile).toBe(real.dataFile);
+    expect(nano.atomStyle).toBe(real.atomStyle);
   });
 
   it("scales damping constants with the unit system's timestep", () => {

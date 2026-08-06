@@ -83,3 +83,4 @@ export async function sameOriginWorkerUrl(remoteUrl: string): Promise<string> {
 
 export const PIPLITE_WHEEL = "piplite-0.8.2-py3-none-any.whl";
 export const PIPLITE_INDEX = "all.json";
+

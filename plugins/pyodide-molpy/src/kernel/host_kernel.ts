@@ -20,7 +20,6 @@ import { createRpcClient } from "../rpc/client";
 import { rpcFailure, rpcSuccess } from "../rpc/envelope";
 import { BOOTSTRAP_STAGES } from "./bootstrap";
 import { isInterruptError } from "./errors";
-import { LOCAL_PY_ROOT, LOCAL_PY_SOURCES } from "./local_py_sources";
 import { MemoryContentsManager } from "./memory_contents";
 import {
   PIPLITE_INDEX,
@@ -402,39 +401,6 @@ export class HostKernel {
       this.pushLog({
         source: "system",
         stream: "info",
-        text: "Worker ready · writing local packages…",
-      });
-
-      await this.executeSilent(
-        `
-import pathlib
-pathlib.Path(${JSON.stringify(LOCAL_PY_ROOT)}).mkdir(parents=True, exist_ok=True)
-`,
-        "system",
-      );
-
-      const entries = Object.entries(LOCAL_PY_SOURCES);
-      const BATCH = 15;
-      for (let i = 0; i < entries.length; i += BATCH) {
-        const slice = entries.slice(i, i + BATCH);
-        const payload = Object.fromEntries(slice);
-        await this.executeSilent(
-          `
-import pathlib, json
-root = pathlib.Path(${JSON.stringify(LOCAL_PY_ROOT)})
-files = json.loads(${JSON.stringify(JSON.stringify(payload))})
-for rel, body in files.items():
-    path = root / rel
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(body)
-`,
-          "system",
-        );
-      }
-
-      this.pushLog({
-        source: "system",
-        stream: "info",
         text: `micropip install ${MICROPIP_REQUIREMENTS.join(", ")}…`,
       });
       await withTimeout(
@@ -446,7 +412,7 @@ await micropip.install(${JSON.stringify([...MICROPIP_REQUIREMENTS])}, keep_going
           "system",
         ),
         180_000,
-        "micropip install",
+        "micropip install ecosystem",
       );
 
       this.pushLog({

@@ -7,11 +7,11 @@
 | Segment | Bump | Meaning |
 |---------|------|---------|
 | major | Plugin system / host contract change | System generation |
-| minor | Add a child under `plugins/*` | **Plugin count** (= `plugins/*` length) |
+| minor | Collection-level feature | Plain semver |
 | patch | Fixes with the same plugin set | Bugfix / docs / rebuild |
 
 Kinds live in `src/version.ts` → `OFFICIAL_PLUGINS` (must match `plugins/*`).
-CI: `npm run check:meta-version`.
+CI: `npm run check:official-plugins`.
 
 Child package versions stay **independent**.
 
@@ -23,12 +23,15 @@ Child package versions stay **independent**.
 
 ## Steps
 
-1. Bump changed `plugins/<name>/package.json` only.
-2. Bump meta: +minor if added a plugin (+ update `OFFICIAL_PLUGINS` + `index.tsx`);
-   +patch for fixes; +major for system changes.
-3. `npm run sync:manifests` && `npm run check:meta-version`
-4. Pack pyodide local sources if monorepo py changed; commit `local_py_sources.ts`.
-5. `npm run check` && `npm run test:e2e`
-6. Commit all `dist/` and `plugins/*/dist/`
-7. `git tag vX.Y.Z && git push origin <branch> --tags`
-8. Refresh README install pin examples if the tag changed.
+1. Bump changed `plugins/<name>/package.json` **and** its `molvis.plugin.json`
+   (`check:manifests` asserts they match).
+2. Bump meta for collection-level changes; plain semver, no count rule.
+   Adding a plugin also means updating `OFFICIAL_PLUGINS` + `src/index.tsx`
+   (`check:official-plugins` asserts the roster matches `plugins/*`).
+3. `npm run check`
+4. `git tag vX.Y.Z && git push origin <branch> --tags` — the workflow builds,
+   flattens and uploads the assets. `dist/` is **not** committed.
+5. Refresh README install pin examples if the tag changed.
+
+**Ordering:** `MICROPIP_REQUIREMENTS` pins `molcrafts-molvis==X`, so that
+version must be on PyPI **before** this repo is tagged.

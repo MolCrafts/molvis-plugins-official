@@ -15,7 +15,6 @@ import {
 import { SCRIPTS_STORAGE_KEY, storedScriptCount } from "./model/scripts";
 import { createPythonMode } from "./modes/python-mode";
 import { createRpcClient } from "./rpc/client";
-import { registerVersionSettings } from "./settings/about/register";
 import { registerEditorSettings } from "./settings/editor/register";
 import type { MolvisPluginModule, PluginAPI } from "@molcrafts/molvis-plugin";
 import { ConsolePanel } from "./ui/ConsolePanel";
@@ -157,7 +156,6 @@ export function registerPyodideMolpy(api: PluginAPI): void {
   );
 
   registerEditorSettings(api);
-  registerVersionSettings(api);
 
   api.rpc.registerMethod("kernelStatus", () => {
     return { status: getKernel().getStatus() };

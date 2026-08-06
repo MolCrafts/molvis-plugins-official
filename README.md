@@ -36,27 +36,35 @@ kernel workers/wheels when present).
 
 ## Develop
 
-The host SDK is not published yet, so link it from a sibling `molvis`
-checkout. Link all three in **one** command — `npm link` re-runs install and
-drops any package linked by a previous invocation:
+The host packages are unpublished, so `package.json` declares them as
+`file:../molvis/*`. Clone MolVis as a **sibling** directory and everything
+resolves with a plain install — no `npm link`:
 
-```bash
-(cd ../molvis/core && npm link) && (cd ../molvis/stage && npm link) \
-  && (cd ../molvis/plugin && npm link)
-npm link @molcrafts/molvis-core @molcrafts/molvis-stage @molcrafts/molvis-plugin
+```
+work/
+  molvis/                  # host checkout
+  molvis-plugins-official/ # this repo
 ```
 
 ```bash
+(cd ../molvis && npm install && npm run build:plugin && npm run build:stage)
 npm install
 npm run dev     # only entry for local work → http://127.0.0.1:4173/
 ```
 
+`npm run dev` is `rsbuild build --watch` plus a CORS static server; pass a
+port with `PORT=4174 npm run dev`, or run it inside one plugin
+(`npm run dev -w @molcrafts/molvis-plugin-alchemist`).
+
 MolVis Settings → Plugins → `http://127.0.0.1:4173/` → edit → **Reload**.
 
 ```bash
-npm run build            # production dist/ (all packages)
-npm run prepare:release  # flatten into release-assets/ for tags
+npm run build   # production dist/ (all packages)
+npm run check   # manifests + typecheck + lint:py + tests + build + bundle
 ```
+
+Release assets are flattened by `.github/workflows/release.yml` on a `v*`
+tag; there is no local packaging step.
 
 ## Release
 

@@ -25,22 +25,20 @@
     "plugins/*"
   ],
   "scripts": {
-    "dev": "node scripts/dev-serve.mjs",
+    "dev": "rsbuild build --watch & trap 'kill 0' EXIT; npx --yes serve -l ${PORT:-4173} --cors .",
     "build:self": "tsc --noEmit -p tsconfig.json && rsbuild build",
     "build": "F=0; for w in plugins/*; do npm run --prefix \"$w\" --if-present build || F=1; done; npm run build:self || F=1; exit $F",
     "typecheck:self": "tsc --noEmit -p tsconfig.json",
     "typecheck": "F=0; for w in plugins/*; do npm run --prefix \"$w\" --if-present typecheck || F=1; done; npm run typecheck:self || F=1; exit $F",
-    "test": "F=0; for w in plugins/*; do npm run --prefix \"$w\" --if-present test || F=1; npm run --prefix \"$w\" --if-present test:py || F=1; done; exit $F",
-    "test:e2e": "npm run test:e2e -w @molcrafts/molvis-plugin-alchemist",
-    "sync:manifests": "node scripts/sync-manifest-versions.mjs",
-    "check:manifests": "node scripts/sync-manifest-versions.mjs --check",
-    "check:meta-version": "node scripts/check-meta-version.mjs",
-    "check": "npm run check:manifests && npm run check:meta-version && npm run typecheck && npm run lint:py && npm run test && npm run build && npm run verify:bundle",
+    "test": "F=0; for w in plugins/*; do npm run --prefix \"$w\" --if-present test || F=1; npm run --prefix \"$w\" --if-present test:py || F=1; done; npm run test:self || F=1; exit $F",
+    "check:manifests": "node -e \"const f=require('fs'),m=p=>JSON.parse(f.readFileSync(p)),cmp=(a,b)=>{const x=(a||'').replace(/[^0-9.]/g,'').split('.').map(Number),y=(b||'').replace(/[^0-9.]/g,'').split('.').map(Number);for(let i=0;i<3;i++){if((x[i]||0)!==(y[i]||0))return (x[i]||0)-(y[i]||0);}return 0;},dirs=f.readdirSync('plugins').filter(d=>f.existsSync('plugins/'+d+'/molvis.plugin.json'));let b=[];for(const d of ['.',...dirs.map(d=>'plugins/'+d)]){const a=m(d+'/molvis.plugin.json'),p=m(d+'/package.json');if(a.version!==p.version)b.push(d+': manifest '+a.version+' != package.json '+p.version);}const root=m('./molvis.plugin.json').molvis;for(const d of dirs){const c=m('plugins/'+d+'/molvis.plugin.json').molvis;if(cmp(c,root)>0)b.push('plugins/'+d+' needs molvis '+c+', collection declares '+root+' \u2014 the collection embeds it');}if(b.length){console.error(b.join('\\n'));process.exit(1);}console.log('manifests ok');\"",
+    "check": "npm run check:manifests && npm run check:official-plugins && npm run typecheck && npm run lint:py && npm run test && npm run build && npm run verify:bundle",
     "prepublishOnly": "npm run check",
-    "prepare:release": "node scripts/prepare-release-assets.mjs",
     "lint:py": "F=0; for w in plugins/*; do npm run --prefix \"$w\" --if-present lint:py || F=1; done; exit $F",
-    "verify:bundle": "F=0; for d in . plugins/*; do [ -f \"$d/dist/plugin.js\" ] && node --check \"$d/dist/plugin.js\" || { echo \"bad bundle: $d\"; F=1; }; done; exit $F",
-    "doctor": "RSDOCTOR=true npm run build:self"
+    "verify:bundle": "F=0; for d in . plugins/*; do [ -f \"$d/dist/plugin.js\" ] && node --check \"$d/dist/plugin.js\" || { echo \"bad bundle: $d\"; F=1; }; done; for d in . plugins/pyodide-molpy; do grep -q kernelRuntime \"$d/rsbuild.config.ts\" 2>/dev/null || continue; for a in coincident.worker.js all.json piplite-0.8.2-py3-none-any.whl; do [ -f \"$d/dist/$a\" ] || { echo \"missing kernel runtime asset: $d/dist/$a\"; F=1; }; done; done; exit $F",
+    "doctor": "RSDOCTOR=true npm run build:self",
+    "check:official-plugins": "node -e \"const f=require('fs'),dirs=f.readdirSync('plugins').filter(d=>f.existsSync('plugins/'+d+'/package.json')).sort(),src=f.readFileSync('src/version.ts','utf8'),m=src.match(/OFFICIAL_PLUGINS[^=]*=\\\\s*\\\\[([^\\\\]]*)\\\\]/);if(!m){console.error('OFFICIAL_PLUGINS not found in src/version.ts');process.exit(1);}const listed=[...m[1].matchAll(/\\\"([^\\\"]+)\\\"/g)].map(x=>x[1]).sort();if(JSON.stringify(listed)!==JSON.stringify(dirs)){console.error('OFFICIAL_PLUGINS '+JSON.stringify(listed)+' != plugins/* '+JSON.stringify(dirs));process.exit(1);}console.log('OFFICIAL_PLUGINS matches plugins/*');\"",
+    "test:self": "rstest run"
   },
   "peerDependencies": {
     "@molcrafts/molplot": ">=0.1.0",

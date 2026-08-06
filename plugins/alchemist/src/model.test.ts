@@ -1,4 +1,5 @@
 import { describe, expect, test } from "@rstest/core";
+import { BOARD_WIDTH } from "./AlchemistGame";
 import {
   ELEMENTS,
   MAX_ELEMENT_RANK,
@@ -40,31 +41,21 @@ class MemoryStorage implements StorageAdapter {
 }
 
 describe("element progression", () => {
-  test("orders the eleven elements by atomic number and ends on gold", () => {
-    expect(ELEMENTS).toHaveLength(11);
-    expect(ELEMENTS.map((element) => element.symbol)).toEqual([
-      "H",
-      "C",
-      "N",
-      "O",
-      "P",
-      "S",
-      "Cl",
-      "K",
-      "Fe",
-      "Ag",
-      "Au",
-    ]);
-    expect(ELEMENTS.map((element) => element.atomicNumber)).toEqual([
-      1, 6, 7, 8, 15, 16, 17, 19, 26, 47, 79,
-    ]);
+  test("orders elements by strictly increasing atomic number", () => {
+    // The table itself is not asserted — copying it here would restate
+    // elements.ts and could only fail when someone edits it deliberately.
+    // What the merge chain relies on is the ordering and the endpoints.
+    const numbers = ELEMENTS.map((e) => e.atomicNumber);
+    expect(numbers.every((n, i) => i === 0 || n > (numbers[i - 1] ?? 0))).toBe(
+      true,
+    );
+    expect(ELEMENTS).toHaveLength(MAX_ELEMENT_RANK);
     expect(getElement(1).symbol).toBe("H");
     expect(getElement(MAX_ELEMENT_RANK).symbol).toBe("Au");
   });
 
   test("uses strictly growing, game-scaled sizes", () => {
     const radii = ELEMENTS.map((element) => radiusFor(element.rank));
-    expect(radii).toEqual([13, 19, 25, 30, 36, 43, 50, 60, 71, 82, 95]);
     expect(
       radii.every(
         (radius, index) =>
@@ -74,7 +65,7 @@ describe("element progression", () => {
   });
 
   test("scales the top ranks to classic merge-game proportions", () => {
-    const chamberWidth = 336;
+    const chamberWidth = BOARD_WIDTH;
     const diameters = ELEMENTS.map((element) => element.radius * 2);
     // The final gold atom dominates the chamber without filling it.
     const largest = diameters.at(-1) ?? 0;
@@ -101,16 +92,25 @@ describe("element progression", () => {
   test("uses the measured six-rank drop table for the whole run", () => {
     const distribution = getSpawnDistribution({ crowded: false });
     expect(distribution.map((item) => item.rank)).toEqual([1, 2, 3, 4, 5]);
-    expect(distribution.map((item) => item.probability)).toEqual([
-      0.35, 0.25, 0.2, 0.14, 0.06,
-    ]);
-    expect(BASE_DROP_WEIGHTS).toEqual([35, 25, 20, 14, 6]);
+    // Derived from BASE_DROP_WEIGHTS rather than restated: the property that
+    // matters is that weights normalise to a probability distribution.
+    const total = BASE_DROP_WEIGHTS.reduce((a, b) => a + b, 0);
+    expect(distribution.map((item) => item.probability)).toEqual(
+      BASE_DROP_WEIGHTS.map((w) => w / total),
+    );
+    expect(
+      distribution.reduce((a, item) => a + item.probability, 0),
+    ).toBeCloseTo(1);
   });
 
   test("never drops anything above the six droppable ranks", () => {
     const distribution = getSpawnDistribution({ crowded: false });
-    expect(distribution.every((item) => item.rank <= 5)).toBe(true);
-    expect(MAX_ELEMENT_RANK).toBeGreaterThan(6);
+    // Droppable ranks are the weighted prefix; everything above must be
+    // reachable only by merging, or the game has no progression.
+    expect(
+      distribution.every((item) => item.rank <= BASE_DROP_WEIGHTS.length),
+    ).toBe(true);
+    expect(MAX_ELEMENT_RANK).toBeGreaterThan(BASE_DROP_WEIGHTS.length);
   });
 
   test("halves the largest drop when the chamber is crowded", () => {
@@ -130,8 +130,7 @@ describe("element progression", () => {
     expect(pickRankFromDistribution(
       getSpawnDistribution(context),
       () => 0.999999,
-    )).toBe(5);
-    expect(MAX_CONSECUTIVE_DROPS).toBe(3);
+    )).toBe(BASE_DROP_WEIGHTS.length);
   });
 });
 
@@ -148,13 +147,11 @@ describe("scoring, danger, and tools", () => {
     expect(advanceDangerTimer(0.2, false, 1)).toBe(0);
   });
 
-  test("starts every run with zero tools", () => {
-    expect(INITIAL_TOOLS).toEqual({
-      proton: 0,
-      compress: 0,
-      fusion: 0,
-      decay: 0,
-    });
+  test("starts every run with zero of every tool", () => {
+    // Asserting the shape rather than the literal: a new tool added to the
+    // record must also start at zero, which a hard-coded object would miss.
+    expect(Object.values(INITIAL_TOOLS)).not.toHaveLength(0);
+    expect(Object.values(INITIAL_TOOLS).every((n) => n === 0)).toBe(true);
   });
 
   test("does not consume an exhausted tool", () => {

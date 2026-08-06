@@ -25,8 +25,5 @@ export const COMMANDS = {
 /** localStorage key for the persisted wizard draft. */
 export const STORAGE_KEY = "lammps-input-config-v3";
 
-/** Superseded draft key, migrated by `normalizeConfig` on load. */
-export const LEGACY_STORAGE_KEY = "lammps-input-config-v2";
-
 /** Filename offered when downloading the generated script. */
 export const DEFAULT_SCRIPT_FILENAME = "in.eq";
