@@ -64,6 +64,18 @@ def list_scripts():
 mv.run = run_script
 mv.list_scripts = list_scripts
 
+# ── %%mv.demo ────────────────────────────────────────────────────────────
+# An input transformer, not a cell magic. `InteractiveShell.run_cell_magic`
+# calls the magic and discards its return value without awaiting, while
+# `run_demo` is a coroutine — so a cell magic could never pace anything.
+# `input_transformers_cleanup` runs *before* IPython's own `cell_magic`
+# transform, which is what rejected `%%mv.demo` with "Cell magic not found".
+from IPython import get_ipython  # noqa: E402
+
+_ip = get_ipython()
+if _ip is not None and mv.demo_cell_transform not in _ip.input_transformers_cleanup:
+    _ip.input_transformers_cleanup.append(mv.demo_cell_transform)
+
 # Expose for subsequent cells / host inject.
 import __main__ as _MAIN  # noqa: E402
 
