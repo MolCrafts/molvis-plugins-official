@@ -65,16 +65,12 @@ mv.run = run_script
 mv.list_scripts = list_scripts
 
 # ── %%mv.demo ────────────────────────────────────────────────────────────
-# An input transformer, not a cell magic. `InteractiveShell.run_cell_magic`
-# calls the magic and discards its return value without awaiting, while
-# `run_demo` is a coroutine — so a cell magic could never pace anything.
-# `input_transformers_cleanup` runs *before* IPython's own `cell_magic`
-# transform, which is what rejected `%%mv.demo` with "Cell magic not found".
+# molvis already registers this when imported into a live shell; call the
+# public entry point anyway so the kernel does not depend on import order.
+# Idempotent by contract.
 from IPython import get_ipython  # noqa: E402
 
-_ip = get_ipython()
-if _ip is not None and mv.demo_cell_transform not in _ip.input_transformers_cleanup:
-    _ip.input_transformers_cleanup.append(mv.demo_cell_transform)
+mv.load_ipython_extension(get_ipython())
 
 # Expose for subsequent cells / host inject.
 import __main__ as _MAIN  # noqa: E402
