@@ -6,7 +6,7 @@
   "description": "MolVis Edit panel plugin for building carbon nanotubes",
   "license": "BSD-3-Clause",
   "scripts": {
-    "build": "rsbuild build",
+    "build": "tsc --noEmit && rsbuild build",
     "typecheck": "tsc --noEmit",
     "test": "rstest run --passWithNoTests",
     "check": "npm run typecheck && npm run test && npm run build",

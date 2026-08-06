@@ -14,14 +14,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      # The kernel bootstrap is real Python now (src/py/**), linted and unit
+      # tested like any other source in this repo.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff pytest
       - run: npm install
       - run: npx playwright install --with-deps chromium
       - run: npm run check:contract
       - run: npm run check:manifests
       - run: npm run check:meta-version
       - run: npm run typecheck
+      - run: npm run lint:py
       - run: npm run test
       - run: npm run build
+      - run: npm run verify:bundle
       - run: npm run test:e2e
       - run: node scripts/prepare-release-assets.mjs
       - name: Upload release-assets (CI artifact; not committed)

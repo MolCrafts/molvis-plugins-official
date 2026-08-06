@@ -1,22 +1,11 @@
 #!/usr/bin/env node
 /**
- * Hot-rebuild plugin dist/ and serve over HTTP (CORS + no-cache).
+ * `npm run dev` — watch rebuild + CORS HTTP for local MolVis install.
  *
- * This is the local-dev entry — not a one-shot `build && serve`.
+ * Default: collection package at http://127.0.0.1:4173/
+ * Optional single package: `npm run dev -- pyodide` (or lammps | alchemist | carbon-tube)
  *
- * Usage:
- *   node scripts/dev-serve.mjs [meta|pyodide|lammps|alchemist|carbon-tube|all]
- *
- * Ports (default):
- *   meta / all → 4173  (repo root; dist/plugin.js + molvis.plugin.json)
- *   pyodide    → 4174
- *   lammps     → 4175
- *   alchemist  → 4176
- *   carbon-tube → 4177
- *
- * Env:
- *   PORT=…              override listen port
- *   MOLVIS_PLUGIN_DEV=1 set by this script for faster rsbuild watch
+ * Env: PORT=… · MOLVIS_PLUGIN_DEV=1 (set here for faster rsbuild watch)
  */
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -28,15 +17,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 
 const TARGETS = {
-  meta: {
+  // Default `npm run dev` — full collection (root package).
+  collection: {
     cwd: root,
     port: 4173,
     serveRoot: root,
-    pack: true, // meta embeds pyodide → keep local py pack fresh
+    pack: true, // embeds pyodide → keep local py pack fresh
     watchPy: true,
-    label: "meta (all official plugins)",
+    label: "official collection",
   },
-  all: null, // alias → meta
   pyodide: {
     cwd: path.join(root, "plugins/pyodide-molpy"),
     port: 4174,
@@ -71,13 +60,15 @@ const TARGETS = {
   },
 };
 
-TARGETS.all = TARGETS.meta;
+// Legacy aliases
+TARGETS.meta = TARGETS.collection;
+TARGETS.all = TARGETS.collection;
 
-const name = (process.argv[2] || "meta").toLowerCase();
+const name = (process.argv[2] || "collection").toLowerCase();
 const target = TARGETS[name];
 if (!target) {
   console.error(
-    `Unknown target ${JSON.stringify(name)}. Use: meta | pyodide | lammps | alchemist | carbon-tube | all`,
+    `Unknown target ${JSON.stringify(name)}. Use: (default collection) | pyodide | lammps | alchemist | carbon-tube`,
   );
   process.exit(1);
 }
@@ -155,14 +146,16 @@ function startStaticServer(serveRoot, listenPort) {
 
     const url = new URL(req.url || "/", `http://127.0.0.1:${listenPort}`);
     let rel = decodeURIComponent(url.pathname);
-    if (rel.endsWith("/")) rel += "index.html";
+    // Directory index BEFORE the generic `index.html` rewrite: appending
+    // `index.html` first turned "/" into a 404 and made the manifest branch
+    // below dead code — so the URL this script prints as the install target
+    // was the one URL it could not serve.
     if (rel === "/" || rel === "") {
-      // Prefer manifest for directory install
-      if (fs.existsSync(path.join(serveRoot, "molvis.plugin.json"))) {
-        rel = "/molvis.plugin.json";
-      } else {
-        rel = "/dist/plugin.js";
-      }
+      rel = fs.existsSync(path.join(serveRoot, "molvis.plugin.json"))
+        ? "/molvis.plugin.json"
+        : "/dist/plugin.js";
+    } else if (rel.endsWith("/")) {
+      rel += "index.html";
     }
 
     const filePath = path.normalize(path.join(serveRoot, rel));
@@ -264,7 +257,7 @@ async function main() {
   startStaticServer(target.serveRoot, port);
   watchPythonPack();
 
-  // rsbuild build --watch writes dist/plugin.js on change
+  // rsbuild build --watch: plugin.js + (if kernelRuntime) workers/wheels via output.copy
   const rsbuildBin = path.join(root, "node_modules/@rsbuild/core/bin/rsbuild.js");
   const rsbuildArgs = fs.existsSync(rsbuildBin)
     ? [rsbuildBin, "build", "--watch"]

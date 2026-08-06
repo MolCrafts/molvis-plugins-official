@@ -34,8 +34,15 @@ coverage/
 playwright-report/
 test-results/
 rstest-report/
+.pytest_cache/
+__pycache__/
 
 # Built artifacts — never commit. CI builds; GitHub Releases host packages.
 dist/
 plugins/*/dist/
 release-assets/
+
+# Generated from src/py/*.py by scripts/pack-py.mjs. The .py sources are
+# in-repo, so there is nothing for CI to miss and nothing to hand-sync.
+plugins/pyodide-molpy/src/kernel/generated_py.ts
+plugins/pyodide-molpy/src/notebooks/generated.ts

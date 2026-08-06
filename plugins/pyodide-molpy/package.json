@@ -6,16 +6,19 @@
   "description": "MolVis plugin: JupyterLite pyodide-kernel + molpy notebook",
   "license": "BSD-3-Clause",
   "scripts": {
-    "prebuild": "node scripts/pack-local-py.mjs",
-    "pretypecheck": "node scripts/pack-local-py.mjs",
-    "pretest": "node scripts/pack-local-py.mjs",
+    "prebuild": "npm run pack:local-py && npm run pack:py && npm run pack:notebooks",
+    "pretypecheck": "npm run pack:local-py && npm run pack:py && npm run pack:notebooks",
+    "pretest": "npm run pack:local-py && npm run pack:py && npm run pack:notebooks",
     "pack:local-py": "node scripts/pack-local-py.mjs",
-    "copy:workers": "node scripts/copy-kernel-workers.mjs",
-    "build": "rsbuild build && npm run copy:workers",
+    "build": "tsc --noEmit && rsbuild build",
     "typecheck": "tsc --noEmit",
     "test": "rstest run",
-    "check": "npm run typecheck && npm run test && npm run build",
-    "check:contract": "node scripts/check-vendored-contract.mjs"
+    "check": "npm run typecheck && npm run lint:py && npm run test && npm run test:py && npm run build",
+    "check:contract": "node scripts/check-vendored-contract.mjs",
+    "pack:py": "node -e \"const f=require('fs'),q=n=>JSON.stringify(f.readFileSync('src/py/'+n,'utf8'));f.writeFileSync('src/kernel/generated_py.ts','/* generated from src/py/*.py by pack:py */\\nexport const RPC_BRIDGE_PY='+q('rpc_bridge.py')+';\\nexport const MOLVIS_SETUP_PY='+q('molvis_setup.py')+';\\n')\"",
+    "lint:py": "ruff check src/py tests/py",
+    "test:py": "python3 -m pytest tests/py -q",
+    "pack:notebooks": "node -e \"const f=require('fs'),d='src/notebooks/',n=f.readdirSync(d).filter(x=>x.endsWith('.ipynb')).sort();f.writeFileSync(d+'generated.ts','/* generated from '+n.join(', ')+' by pack:notebooks */\\n'+n.map(x=>'export const '+x.replace('.ipynb','').toUpperCase()+'_IPYNB = '+f.readFileSync(d+x,'utf8').trim()+' as const;').join('\\n')+'\\n')\""
   },
   "peerDependencies": {
     "@molcrafts/molvis-core": ">=0.1.0",

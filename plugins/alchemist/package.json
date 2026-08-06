@@ -25,7 +25,7 @@
     "dev": "rsbuild dev",
     "build:site": "rsbuild build",
     "build:plugin": "rslib build",
-    "build": "npm run build:site && npm run build:plugin",
+    "build": "tsc --noEmit && npm run build:site && npm run build:plugin",
     "test": "rstest run --config rstest.config.ts",
     "test:watch": "rstest watch --config rstest.config.ts",
     "test:e2e": "rstest run --config rstest.e2e.config.ts",

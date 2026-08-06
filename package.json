@@ -24,32 +24,23 @@
     "plugins/*"
   ],
   "scripts": {
-    "build": "npm run build -w @molcrafts/molvis-plugin-lammps-input-generator && npm run build -w @molcrafts/molvis-plugin-alchemist && npm run build -w @molcrafts/molvis-plugin-pyodide-molpy && npm run build -w @molcrafts/molvis-plugin-carbon-tube-builder && npm run build:meta",
-    "build:meta": "rsbuild build",
-    "typecheck": "npm run typecheck -w @molcrafts/molvis-plugin-lammps-input-generator && npm run typecheck -w @molcrafts/molvis-plugin-alchemist && npm run typecheck -w @molcrafts/molvis-plugin-pyodide-molpy && npm run typecheck -w @molcrafts/molvis-plugin-carbon-tube-builder && tsc --noEmit -p tsconfig.json",
-    "test": "npm run test -w @molcrafts/molvis-plugin-lammps-input-generator && npm run test -w @molcrafts/molvis-plugin-alchemist && npm run test -w @molcrafts/molvis-plugin-pyodide-molpy && npm run test -w @molcrafts/molvis-plugin-carbon-tube-builder",
+    "dev": "node scripts/dev-serve.mjs",
+    "build:self": "tsc --noEmit -p tsconfig.json && rsbuild build",
+    "build": "F=0; for w in plugins/*; do npm run --prefix \"$w\" --if-present build || F=1; done; npm run build:self || F=1; exit $F",
+    "typecheck:self": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "F=0; for w in plugins/*; do npm run --prefix \"$w\" --if-present typecheck || F=1; done; npm run typecheck:self || F=1; exit $F",
+    "test": "F=0; for w in plugins/*; do npm run --prefix \"$w\" --if-present test || F=1; npm run --prefix \"$w\" --if-present test:py || F=1; done; exit $F",
     "test:e2e": "npm run test:e2e -w @molcrafts/molvis-plugin-alchemist",
     "sync:manifests": "node scripts/sync-manifest-versions.mjs",
     "check:manifests": "node scripts/sync-manifest-versions.mjs --check",
     "check:meta-version": "node scripts/check-meta-version.mjs",
-    "check": "npm run check:contract && npm run check:manifests && npm run check:meta-version && npm run typecheck && npm run test && npm run build",
+    "check": "npm run check:contract && npm run check:manifests && npm run check:meta-version && npm run typecheck && npm run lint:py && npm run test && npm run build && npm run verify:bundle",
     "prepublishOnly": "npm run check",
-    "dev": "node scripts/dev-serve.mjs meta",
-    "dev:meta": "node scripts/dev-serve.mjs meta",
-    "dev:pyodide": "node scripts/dev-serve.mjs pyodide",
-    "dev:lammps": "node scripts/dev-serve.mjs lammps",
-    "dev:alchemist": "node scripts/dev-serve.mjs alchemist",
-    "dev:carbon-tube": "node scripts/dev-serve.mjs carbon-tube",
-    "serve": "node scripts/dev-serve.mjs meta",
-    "serve:meta": "node scripts/dev-serve.mjs meta",
-    "serve:pyodide": "node scripts/dev-serve.mjs pyodide",
-    "serve:lammps": "node scripts/dev-serve.mjs lammps",
-    "serve:alchemist": "node scripts/dev-serve.mjs alchemist",
-    "serve:carbon-tube": "node scripts/dev-serve.mjs carbon-tube",
-    "preview": "npm run build && npx --yes serve -l 4173 --cors .",
-    "preview:pyodide": "npm run build -w @molcrafts/molvis-plugin-pyodide-molpy && npx --yes serve -l 4174 --cors plugins/pyodide-molpy",
     "prepare:release": "node scripts/prepare-release-assets.mjs",
-    "check:contract": "node scripts/check-vendored-contract.mjs && npm run check:contract -w @molcrafts/molvis-plugin-lammps-input-generator && npm run check:contract -w @molcrafts/molvis-plugin-alchemist && npm run check:contract -w @molcrafts/molvis-plugin-pyodide-molpy && npm run check:contract -w @molcrafts/molvis-plugin-carbon-tube-builder"
+    "check:contract:self": "node scripts/check-vendored-contract.mjs",
+    "check:contract": "F=0; for w in plugins/*; do npm run --prefix \"$w\" --if-present check:contract || F=1; done; npm run check:contract:self || F=1; exit $F",
+    "lint:py": "F=0; for w in plugins/*; do npm run --prefix \"$w\" --if-present lint:py || F=1; done; exit $F",
+    "verify:bundle": "F=0; for d in . plugins/*; do [ -f \"$d/dist/plugin.js\" ] && node --check \"$d/dist/plugin.js\" || { echo \"bad bundle: $d\"; F=1; }; done; exit $F"
   },
   "peerDependencies": {
     "@molcrafts/molplot": ">=0.1.0",
@@ -66,16 +57,18 @@
     "@rsbuild/plugin-react": "^2.1.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "lucide-react": "^1.28.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "tailwind-merge": "^3.6.0",
     "typescript": "^7.0.2"
   },
   "packageManager": "npm@11.17.0+sha512.3eeaf18997b11070d313849268b23766b9db0068997dec9471073170fe43fa17f2b4d0337bf0f52330ee2274e7f5754b21b01052742e48f5c9c74d8b1e32ef43",
   "dependencies": {
-    "radix-ui": "^1.6.7"
+    "@radix-ui/react-checkbox": "^1.3.3",
+    "@radix-ui/react-select": "^2.2.6",
+    "@radix-ui/react-slot": "^1.2.4",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.17.0",
+    "tailwind-merge": "^3.6.0"
   }
 }

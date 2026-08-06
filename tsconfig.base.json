@@ -15,10 +15,23 @@
     "forceConsistentCasingInFileNames": true,
     "jsx": "react-jsx",
     "jsxImportSource": "react",
-    "types": ["react", "react-dom"]
-    ,"paths": {
+    "types": ["react", "react-dom"],
+    "paths": {
       "@/*": ["./src/*"],
-      "@molcrafts/molvis-core/molrs": ["../molrs/molrs-wasm/pkg/molrs.d.ts"]
+      // Host-injected specifier: the loader hands plugins the page's single
+      // molrs instance under this name, but the published
+      // `@molcrafts/molvis-core` has no `./molrs` export, so tsc cannot
+      // resolve it on its own.
+      //
+      // This MUST point inside node_modules. It used to point at a sibling
+      // checkout (`../molrs/molrs-wasm/pkg/molrs.d.ts`), which typechecked
+      // green on a dev machine and failed in CI with TS2307 — a failure that
+      // stayed invisible because an earlier package in the `&&` chain always
+      // died first.
+      // Other host-injected specifiers (`…/keys`, `…/elements`, `@molcrafts/
+      // molplot`, `@molcrafts/molvis-stage`) get a mapping when a plugin
+      // actually imports one — an unused mapping is a guess nobody checks.
+      "@molcrafts/molvis-core/molrs": ["./node_modules/@molcrafts/molrs/molrs.d.ts"]
     }
   }
 }
