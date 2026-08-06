@@ -1,0 +1,24 @@
+# Python that runs inside the Pyodide worker.
+#
+# It used to live in a TypeScript template literal, where no linter could
+# reach it — which is how a bare `except Exception: return` around the RPC
+# reply handler survived long enough to deadlock every cell.
+line-length = 88
+target-version = "py312"
+
+[lint]
+select = [
+  "E",    # pycodestyle
+  "F",    # pyflakes
+  "B",    # bugbear
+  "BLE",  # blind-except  ← the rule that would have flagged the deadlock
+  "UP",   # pyupgrade
+  "RUF",
+]
+
+[lint.per-file-ignores]
+# These modules are executed by the kernel, not imported: names defined by an
+# earlier stage (`invoke`) and the deliberate `exec` of user scripts are the
+# design, not oversights.
+"src/py/molvis_setup.py" = ["F821", "S102"]
+"tests/py/*" = ["S101"]

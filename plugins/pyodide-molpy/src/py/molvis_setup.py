@@ -1,0 +1,81 @@
+"""Wire molvis-python onto the RPC bridge and expose it to notebook cells.
+
+Runs after ``rpc_bridge.py`` in the same interpreter, as a separate kernel
+execution so a failure here is attributed to this stage rather than to one
+130-line blob.
+"""
+
+import pathlib
+import sys
+
+# ── Local monorepo pack (host writes it into the worker FS) ─────────────
+_LOCAL = pathlib.Path("/home/pyodide/packages")
+if _LOCAL.is_dir() and str(_LOCAL) not in sys.path:
+    sys.path.insert(0, str(_LOCAL))
+
+# Prefer the local pack over anything installed earlier.
+for _name in list(sys.modules):
+    if _name in ("molpy", "molvis") or _name.startswith(("molpy.", "molvis.")):
+        del sys.modules[_name]
+
+import molvis as mv  # noqa: E402  (must follow the sys.path/sys.modules fix-up)
+
+stage = mv.Stage.from_inprocess(invoke, name="default", gui=True)
+
+#: Script library; the host replaces it wholesale via ``syncScripts``.
+_MOLVIS_SCRIPTS: dict[str, str] = {}
+
+
+def _normalize_script_name(name):
+    text = str(name).strip().lstrip("/")
+    if not text:
+        raise ValueError("empty script name")
+    return text if text.endswith(".py") else text + ".py"
+
+
+def run_script(script, /, **_kwargs):
+    key = _normalize_script_name(script)
+    source = _MOLVIS_SCRIPTS.get(key)
+    if source is None:
+        known = ", ".join(sorted(_MOLVIS_SCRIPTS)) or "(none)"
+        raise FileNotFoundError(f"script not found: {key!r}. Known: {known}")
+    scope = {
+        "__name__": f"__molvis_script__:{key}",
+        "__file__": key,
+        "mv": mv,
+        "molvis": mv,
+        "stage": stage,
+        "math": __import__("math"),
+    }
+    try:
+        import molpy as mp
+
+        scope["mp"] = mp
+        scope["molpy"] = mp
+    except ImportError:
+        pass
+    exec(compile(source, key, "exec"), scope)
+
+
+def list_scripts():
+    return sorted(_MOLVIS_SCRIPTS)
+
+
+mv.run = run_script
+mv.list_scripts = list_scripts
+
+# Expose for subsequent cells / host inject.
+import __main__ as _MAIN  # noqa: E402
+
+_MAIN.stage = stage
+_MAIN.mv = mv
+_MAIN.molvis = mv
+try:
+    import molpy as _mp
+
+    _MAIN.mp = _mp
+    _MAIN.molpy = _mp
+except ImportError:
+    pass
+
+print("[molvis] pyodide-kernel ready · Stage → host RPCRouter")
