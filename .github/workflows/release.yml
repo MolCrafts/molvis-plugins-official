@@ -31,9 +31,21 @@ jobs:
           python-version: "3.12"
       - run: pip install ruff pytest
 
+      # The plugin SDK is not published yet; link it from the host repo.
+      - uses: actions/checkout@v4
+        with:
+          repository: MolCrafts/molvis
+          path: .molvis
       - run: npm install
+      - name: Link the host SDK
+        run: |
+          npm install --prefix .molvis
+          for p in core stage plugin; do (cd .molvis/$p && npm link); done
+          npm run build:core --prefix .molvis
+          npm run build:stage --prefix .molvis
+          npm run build:plugin --prefix .molvis
+          npm link @molcrafts/molvis-core @molcrafts/molvis-stage @molcrafts/molvis-plugin
       - run: npx playwright install --with-deps chromium
-      - run: npm run check:contract
       - run: npm run check:manifests
       - run: npm run check:meta-version
       - run: npm run typecheck

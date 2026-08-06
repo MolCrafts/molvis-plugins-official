@@ -10,7 +10,7 @@ import {
   upsertScript,
   type ScriptLibrary,
 } from "../model/scripts";
-import type { PluginStorage } from "../types/plugin-api";
+import type { PluginStorage } from "@molcrafts/molvis-plugin";
 import { useKernel } from "./hooks/useKernel";
 import { loadMonaco, type MonacoEditor } from "./monaco";
 import { css } from "./styles";

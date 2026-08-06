@@ -23,7 +23,7 @@ import {
   useEditorSettings,
 } from "../model/editor_settings";
 import { loadLibrary, scriptsMap } from "../model/scripts";
-import type { PluginStorage } from "../types/plugin-api";
+import type { PluginStorage } from "@molcrafts/molvis-plugin";
 import { useKernel } from "./hooks/useKernel";
 import { IconButton } from "./IconButton";
 import { MonacoCellEditor } from "./MonacoCellEditor";

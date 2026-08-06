@@ -4,7 +4,7 @@ import {
 } from "@molcrafts/molvis-core/molrs";
 import { useState } from "react";
 
-import type { Molvis, MolvisPluginModule, PluginAPI } from "./types/plugin-api";
+import type { Molvis, MolvisPluginModule, PluginAPI } from "@molcrafts/molvis-plugin";
 import "./styles.css";
 import { PLUGIN_ID, PLUGIN_NAME, PLUGIN_VERSION } from "./version";
 

@@ -9,8 +9,7 @@
     "build": "tsc --noEmit && rsbuild build",
     "typecheck": "tsc --noEmit",
     "test": "rstest run --passWithNoTests",
-    "check": "npm run typecheck && npm run test && npm run build",
-    "check:contract": "node scripts/check-vendored-contract.mjs"
+    "check": "npm run typecheck && npm run test && npm run build"
   },
   "peerDependencies": {
     "@molcrafts/molrs": ">=0.12.0",

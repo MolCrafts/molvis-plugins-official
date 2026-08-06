@@ -2,7 +2,7 @@
  * Shared rsbuild for MolVis page plugins.
  *
  * - ESM `dist/plugin.js` (all-in-one)
- * - Host peers externalized (`plugin-externals.ts`)
+ * - Host peers externalized (`@molcrafts/molvis-plugin`)
  * - Optional **kernel runtime** assets via `output.copy` (workers + piplite
  *   wheels from `@jupyterlite/pyodide-kernel`) — no post-build shell scripts
  */
@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import type { RsbuildConfig } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
 import { rspack } from "@rspack/core";
-import { pluginExternals } from "./plugin-externals";
+import { pluginExternals } from "@molcrafts/molvis-plugin";
 
 export { pluginExternals };
 

@@ -1,4 +1,4 @@
-import type { Molvis } from "@molcrafts/molvis-core";
+import type { Molvis } from "@molcrafts/molvis-plugin";
 
 /**
  * View-like plugin mode: no special picking, canvas navigation stays usable.

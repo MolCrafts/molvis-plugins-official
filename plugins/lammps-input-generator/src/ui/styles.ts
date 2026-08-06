@@ -4,7 +4,7 @@
  *
  * Token names match host `page/src/styles/tailwind.css` (`--molvis-*`).
  */
-import { FONT, statusToken, token } from "../types/contract_tokens";
+import { FONT, statusToken, token } from "@molcrafts/molvis-plugin";
 
 // One vendored token table for every plugin. The previous local copies chained
 // through `var(--background)` / `var(--border)`, which the host never defines,

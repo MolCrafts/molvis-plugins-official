@@ -11,7 +11,7 @@ import {
   statusToken,
   token,
   type TokenName,
-} from "../types/contract_tokens";
+} from "@molcrafts/molvis-plugin";
 
 export type XtermTheme = {
   background: string;

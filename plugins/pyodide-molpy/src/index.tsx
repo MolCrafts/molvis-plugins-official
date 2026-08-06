@@ -17,7 +17,7 @@ import { createPythonMode } from "./modes/python-mode";
 import { createRpcClient } from "./rpc/client";
 import { registerVersionSettings } from "./settings/about/register";
 import { registerEditorSettings } from "./settings/editor/register";
-import type { MolvisPluginModule, PluginAPI } from "./types/plugin-api";
+import type { MolvisPluginModule, PluginAPI } from "@molcrafts/molvis-plugin";
 import { ConsolePanel } from "./ui/ConsolePanel";
 import { NotebookPanel } from "./ui/NotebookPanel";
 import { ScriptDialog } from "./ui/ScriptDialog";

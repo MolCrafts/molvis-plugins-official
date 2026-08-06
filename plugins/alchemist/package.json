@@ -31,8 +31,7 @@
     "test:e2e": "rstest run --config rstest.e2e.config.ts",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm run test && npm run build && npm run test:e2e",
-    "prepublishOnly": "npm run check",
-    "check:contract": "node scripts/check-vendored-contract.mjs"
+    "prepublishOnly": "npm run check"
   },
   "devDependencies": {
     "@rsbuild/core": "^2.1.9",

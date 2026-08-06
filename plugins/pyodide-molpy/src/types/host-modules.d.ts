@@ -1,20 +1,14 @@
 /**
- * Host-provided module specifiers.
+ * Host-provided module specifier with no package behind it.
  *
- * `@molvis/stage` (and its legacy `@molcrafts/molvis-stage` spelling) is never
- * installed from npm — the MolVis page loader registers the engine on
- * `globalThis.__MOLVIS_PLUGIN_HOST_MODULES__` and rewrites bare imports of
- * these specifiers to blob URLs before the plugin is imported.
+ * `@molvis/stage` is the legacy spelling the host still injects on
+ * `globalThis.__MOLVIS_PLUGIN_HOST_MODULES__`; nothing publishes it, so
+ * `rpc/client.ts`'s dynamic-import fallback needs this declaration to
+ * typecheck.
  *
- * Declaring them here is what lets `tsc --noEmit` pass: without it the
- * dynamic-import fallback in `src/rpc/client.ts` fails with TS2307 and takes
- * the whole workspace typecheck down with it.
- *
- * These are shorthand (untyped) declarations on purpose. `client.ts` casts
- * to its own narrow `StageApi` view of the handful of members it uses;
- * spelling the engine's real types out here would create a second, drifting
- * copy of the host contract — the problem `src/types/plugin-api.ts` already
- * has three times over.
+ * The current spelling `@molcrafts/molvis-stage` is deliberately NOT
+ * declared here: it resolves to the real package, and a shorthand ambient
+ * declaration would shadow those types with `any` — which is how `Molvis`
+ * started reading as a namespace instead of a type.
  */
 declare module "@molvis/stage";
-declare module "@molcrafts/molvis-stage";

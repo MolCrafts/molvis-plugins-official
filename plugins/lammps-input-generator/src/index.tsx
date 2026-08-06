@@ -9,7 +9,7 @@ import { generateLammpsEqInput } from "./generate/generate";
 import { defaultConfig } from "./model/defaults";
 import type { LammpsEqConfig } from "./model/types";
 import { registerAboutSettings } from "./settings/about/register";
-import type { MolvisPluginModule, PluginAPI } from "./types/plugin-api";
+import type { MolvisPluginModule, PluginAPI } from "@molcrafts/molvis-plugin";
 import {
   COMMANDS,
   LEGACY_STORAGE_KEY,

@@ -5,7 +5,7 @@ import {
   normalizeConfig,
 } from "../model/defaults";
 import type { LammpsEqConfig } from "../model/types";
-import type { PluginStorage } from "../types/plugin-api";
+import type { PluginStorage } from "@molcrafts/molvis-plugin";
 import {
   DEFAULT_SCRIPT_FILENAME,
   LEGACY_STORAGE_KEY,

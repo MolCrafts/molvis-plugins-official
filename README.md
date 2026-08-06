@@ -36,6 +36,16 @@ kernel workers/wheels when present).
 
 ## Develop
 
+The host SDK is not published yet, so link it from a sibling `molvis`
+checkout. Link all three in **one** command — `npm link` re-runs install and
+drops any package linked by a previous invocation:
+
+```bash
+(cd ../molvis/core && npm link) && (cd ../molvis/stage && npm link) \
+  && (cd ../molvis/plugin && npm link)
+npm link @molcrafts/molvis-core @molcrafts/molvis-stage @molcrafts/molvis-plugin
+```
+
 ```bash
 npm install
 npm run dev     # only entry for local work → http://127.0.0.1:4173/

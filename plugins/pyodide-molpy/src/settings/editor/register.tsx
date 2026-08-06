@@ -2,7 +2,7 @@ import {
   saveEditorSettings,
   useEditorSettings,
 } from "../../model/editor_settings";
-import type { PluginAPI } from "../../types/plugin-api";
+import type { PluginAPI } from "@molcrafts/molvis-plugin";
 
 export function registerEditorSettings(api: PluginAPI): void {
   api.settings.registerSection({

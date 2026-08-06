@@ -5,7 +5,7 @@
  *
  * Token names match host `page/src/styles/tailwind.css` (`--molvis-*`).
  */
-import { FONT } from "../types/contract_tokens";
+import { FONT } from "@molcrafts/molvis-plugin";
 import { tokens } from "./theme";
 
 const border = tokens.border;

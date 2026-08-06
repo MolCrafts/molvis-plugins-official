@@ -14,7 +14,6 @@
     "typecheck": "tsc --noEmit",
     "test": "rstest run",
     "check": "npm run typecheck && npm run lint:py && npm run test && npm run test:py && npm run build",
-    "check:contract": "node scripts/check-vendored-contract.mjs",
     "pack:py": "node -e \"const f=require('fs'),q=n=>JSON.stringify(f.readFileSync('src/py/'+n,'utf8'));f.writeFileSync('src/kernel/generated_py.ts','/* generated from src/py/*.py by pack:py */\\nexport const RPC_BRIDGE_PY='+q('rpc_bridge.py')+';\\nexport const MOLVIS_SETUP_PY='+q('molvis_setup.py')+';\\n')\"",
     "lint:py": "ruff check src/py tests/py",
     "test:py": "python3 -m pytest tests/py -q",
@@ -33,7 +32,6 @@
     "@lumino/signaling": "^2.1.6"
   },
   "devDependencies": {
-    "@molcrafts/molvis-core": "^0.1.1",
     "@rsbuild/core": "^2.1.9",
     "@rsbuild/plugin-react": "^2.1.0",
     "@rstest/core": "^0.11.5",

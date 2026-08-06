@@ -1,4 +1,4 @@
-import type { PluginAPI } from "../../types/plugin-api";
+import type { PluginAPI } from "@molcrafts/molvis-plugin";
 
 export function registerAboutSettings(api: PluginAPI): void {
   api.settings.registerSection({

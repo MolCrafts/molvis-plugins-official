@@ -1,6 +1,6 @@
 import type { OutputConfig } from "../../model/types";
 import { css } from "../styles";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@molcrafts/molvis-plugin/ui";
 
 export function OutputStep({
   value,

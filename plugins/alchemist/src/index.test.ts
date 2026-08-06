@@ -1,7 +1,7 @@
 import { expect, test } from "@rstest/core";
 import plugin from "./index";
-import { fakePluginAPI, mapStorage } from "./types/contract_testing";
-import type { PluginDialogSpec } from "./types/plugin-api";
+import { fakePluginAPI, mapStorage } from "@molcrafts/molvis-plugin/testing";
+import type { PluginDialogSpec } from "@molcrafts/molvis-plugin";
 import { COMMANDS, DIALOG_ID, PLUGIN_ID } from "./version";
 
 test("registers the Alchemist dialog and a palette command that opens it", () => {

@@ -1,4 +1,4 @@
-import type { PluginAPI } from "../../types/plugin-api";
+import type { PluginAPI } from "@molcrafts/molvis-plugin";
 import { WizardDialog } from "../../ui/WizardDialog";
 import { COMMANDS, DIALOG_ID } from "../../version";
 

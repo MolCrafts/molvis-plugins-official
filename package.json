@@ -34,11 +34,9 @@
     "sync:manifests": "node scripts/sync-manifest-versions.mjs",
     "check:manifests": "node scripts/sync-manifest-versions.mjs --check",
     "check:meta-version": "node scripts/check-meta-version.mjs",
-    "check": "npm run check:contract && npm run check:manifests && npm run check:meta-version && npm run typecheck && npm run lint:py && npm run test && npm run build && npm run verify:bundle",
+    "check": "npm run check:manifests && npm run check:meta-version && npm run typecheck && npm run lint:py && npm run test && npm run build && npm run verify:bundle",
     "prepublishOnly": "npm run check",
     "prepare:release": "node scripts/prepare-release-assets.mjs",
-    "check:contract:self": "node scripts/check-vendored-contract.mjs",
-    "check:contract": "F=0; for w in plugins/*; do npm run --prefix \"$w\" --if-present check:contract || F=1; done; npm run check:contract:self || F=1; exit $F",
     "lint:py": "F=0; for w in plugins/*; do npm run --prefix \"$w\" --if-present lint:py || F=1; done; exit $F",
     "verify:bundle": "F=0; for d in . plugins/*; do [ -f \"$d/dist/plugin.js\" ] && node --check \"$d/dist/plugin.js\" || { echo \"bad bundle: $d\"; F=1; }; done; exit $F"
   },

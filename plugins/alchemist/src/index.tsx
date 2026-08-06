@@ -5,7 +5,7 @@ import type {
   MolvisPluginModule,
   PluginAPI,
   PluginStorage,
-} from "./types/plugin-api";
+} from "@molcrafts/molvis-plugin";
 import {
   COMMANDS,
   DIALOG_ID,

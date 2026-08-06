@@ -10,7 +10,7 @@ import alchemistPlugin from "../plugins/alchemist/src/index";
 import { registerCarbonTubeBuilder } from "../plugins/carbon-tube-builder/src/index";
 import { registerLammpsEqInput } from "../plugins/lammps-input-generator/src/index";
 import { registerPyodideMolpy } from "../plugins/pyodide-molpy/src/index";
-import type { MolvisPluginModule, PluginAPI } from "./types/plugin-api";
+import type { MolvisPluginModule, PluginAPI } from "@molcrafts/molvis-plugin";
 import { PLUGIN_ID, PLUGIN_VERSION } from "./version";
 
 const plugin: MolvisPluginModule = {
