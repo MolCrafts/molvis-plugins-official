@@ -1,15 +1,14 @@
 import { describe, expect, it } from "@rstest/core";
 import { saveLibrary, storedScriptCount } from "../src/model/scripts";
 import {
-  createCell,
   defaultNotebook,
   demoNotebook,
   loadNotebook,
-  notebookToIpynb,
   resetToDemoNotebook,
   saveNotebook,
   storedCellCount,
 } from "../src/model/notebook";
+import { createCell } from "../src/model/cells";
 
 describe("notebook model", () => {
   it("migrates the old demo rate option to seconds per step", () => {
@@ -20,18 +19,6 @@ describe("notebook model", () => {
     };
     saveNotebook(storage, { cells: [createCell("%%mv.demo rate=2\nprint(1)")], nextExec: 1 });
     expect(loadNotebook(storage).cells[0].source).toContain("delay=0.5");
-  });
-
-  it("exports a valid nbformat 4 notebook", () => {
-    const nb = { cells: [createCell("print('edited')\n")], nextExec: 1 };
-    const exported = JSON.parse(notebookToIpynb(nb));
-    expect(exported.nbformat).toBe(4);
-    expect(exported.cells[0]).toMatchObject({
-      cell_type: "code",
-      source: ["print('edited')\n"],
-      outputs: [],
-    });
-    expect(exported.metadata.kernelspec.name).toBe("python3");
   });
 
   it("creates a default notebook with one quick-start cell", () => {

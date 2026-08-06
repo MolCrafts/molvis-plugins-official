@@ -116,6 +116,17 @@ export function IconDownload() {
   );
 }
 
+/** Mirror of {@link IconDownload} — import is the export's counterpart. */
+export function IconUpload() {
+  return (
+    <svg {...base}>
+      <path d="M12 15V3" />
+      <polyline points="7 8 12 3 17 8" />
+      <path d="M5 20h14" />
+    </svg>
+  );
+}
+
 export function IconRefresh() {
   return (
     <svg {...base}>

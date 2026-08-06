@@ -4,15 +4,14 @@ import {
   useRef,
   useState,
 } from "react";
+import { createCell, type NotebookCell, type NotebookState } from "../model/cells";
 import {
-  createCell,
   downloadNotebookIpynb,
   loadNotebook,
   saveNotebook,
   subscribeNotebookExternal,
-  type NotebookCell,
-  type NotebookState,
 } from "../model/notebook";
+import { IpynbError, ipynbToNotebook } from "../model/ipynb";
 import {
   isHtmlishMime,
   isImageMime,
@@ -38,6 +37,7 @@ import {
   IconPlayAll,
   IconPlayBelow,
   IconDownload,
+  IconUpload,
   IconCheck,
   IconStop,
   IconX,
@@ -113,6 +113,8 @@ export function NotebookPanel({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [monacoError, setMonacoError] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const editorSettings = useEditorSettings(storage);
   const deleteKeyAt = useRef(0);
 
@@ -138,6 +140,28 @@ export function NotebookPanel({
       saveNotebook(storage, next);
     },
     [storage],
+  );
+
+  /**
+   * Replace the notebook from a local `.ipynb`.
+   *
+   * The counterpart of the export button: until the reader existed, a
+   * notebook this plugin exported could never be opened again.
+   */
+  const importNotebookFile = useCallback(
+    async (file: File) => {
+      try {
+        persist(ipynbToNotebook(await file.text()));
+        setImportError(null);
+      } catch (err) {
+        setImportError(
+          err instanceof IpynbError
+            ? `${file.name}: ${err.message}`
+            : `${file.name}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    },
+    [persist],
   );
 
   const updateCell = (id: string, patch: Partial<NotebookCell>) => {
@@ -361,11 +385,29 @@ export function NotebookPanel({
           <IconStop />
         </IconButton>
         <IconButton
+          label="Import notebook (.ipynb)"
+          onClick={() => importInputRef.current?.click()}
+        >
+          <IconUpload />
+        </IconButton>
+        <IconButton
           label="Export notebook (.ipynb)"
           onClick={() => downloadNotebookIpynb(nbRef.current)}
         >
           <IconDownload />
         </IconButton>
+        {/* Hidden: a file picker is the only way to read a local .ipynb. */}
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".ipynb,application/x-ipynb+json,application/json"
+          style={{ display: "none" }}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (file) void importNotebookFile(file);
+          }}
+        />
 
         <span style={css.toolbarSpacer} />
         <span style={css.toolbarDivider} aria-hidden="true" />
@@ -382,6 +424,9 @@ export function NotebookPanel({
         </IconButton>
       </div>
 
+      {importError ? (
+        <div role="alert" style={css.editorError}>{importError}</div>
+      ) : null}
       {monacoError ? (
         <div role="alert" style={css.editorError}>{monacoError}</div>
       ) : null}
