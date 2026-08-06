@@ -1,16 +1,12 @@
 #!/usr/bin/env node
 /**
- * Flatten built plugin packages into `release-assets/` for GitHub Releases.
+ * Package `dist/` trees into `release-assets/` for GitHub Releases.
  *
- * Host resolve (`owner/repo@vX.Y.Z`) loads:
- *   https://github.com/.../releases/download/vX.Y.Z/molvis.plugin.json
- *   https://github.com/.../releases/download/vX.Y.Z/plugin.js
- *   (+ sibling workers / pypi files)
+ * Expects `npm run build` already produced:
+ *   dist/plugin.js
+ *   dist/*.worker.js, all.json, *.whl   (when kernelRuntime is on)
  *
- * Manifest `entry` becomes `plugin.js` (not `dist/plugin.js`).
- *
- * Usage (after `npm run build`):
- *   node scripts/prepare-release-assets.mjs
+ * Rewrites manifest entry → `plugin.js` (flat Release layout).
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -28,23 +24,26 @@ function copyFile(src, dest) {
   fs.copyFileSync(src, dest);
 }
 
-function copyDirFlatOrTree(srcDir, destDir) {
+function copyDist(srcDir, destDir) {
   if (!fs.existsSync(srcDir)) return;
   for (const name of fs.readdirSync(srcDir)) {
-    const s = path.join(srcDir, name);
-    const d = path.join(destDir, name);
-    const st = fs.statSync(s);
-    if (st.isDirectory()) {
-      copyDirFlatOrTree(s, d);
-    } else if (
+    if (
       name.endsWith(".map") ||
       name.endsWith(".LICENSE.txt") ||
-      name === ".DS_Store"
+      name === ".DS_Store" ||
+      name === "static"
     ) {
-      continue;
-    } else {
-      copyFile(s, d);
+      // Skip sourcemaps / webpack junk; keep flat runtime files only.
+      if (name === "static") continue;
+      if (name.endsWith(".map") || name.endsWith(".LICENSE.txt")) continue;
     }
+    const s = path.join(srcDir, name);
+    const st = fs.statSync(s);
+    if (st.isDirectory()) {
+      // Only top-level flat assets matter for the host.
+      continue;
+    }
+    copyFile(s, path.join(destDir, name));
   }
 }
 
@@ -54,57 +53,23 @@ function writeReleaseManifest(srcManifestPath, destPath) {
   fs.writeFileSync(destPath, `${JSON.stringify(man, null, 2)}\n`);
 }
 
-/** GitHub Release assets are flat — lift any nested files to dest root. */
-function flattenInto(destDir) {
-  const walk = (dir) => {
-    for (const name of fs.readdirSync(dir)) {
-      const full = path.join(dir, name);
-      if (fs.statSync(full).isDirectory()) {
-        walk(full);
-        fs.rmdirSync(full);
-        continue;
-      }
-      if (dir === destDir) continue;
-      const target = path.join(destDir, name);
-      if (full !== target) {
-        if (fs.existsSync(target)) fs.rmSync(target);
-        fs.renameSync(full, target);
-      }
-    }
-  };
-  walk(destDir);
-}
-
 rmrf(outDir);
 fs.mkdirSync(outDir, { recursive: true });
 
-// Meta collection (root dist + workers from pyodide if present)
-const metaDist = path.join(root, "dist");
-if (fs.existsSync(path.join(metaDist, "plugin.js"))) {
-  const metaOut = path.join(outDir, "meta");
-  fs.mkdirSync(metaOut, { recursive: true });
-  copyDirFlatOrTree(metaDist, metaOut);
-  // Prefer root-level workers from pyodide build if meta copied hashed static only
-  const pyWorkers = path.join(root, "plugins/pyodide-molpy/dist");
-  for (const w of ["comlink.worker.js", "coincident.worker.js"]) {
-    const src = path.join(pyWorkers, w);
-    if (fs.existsSync(src) && !fs.existsSync(path.join(metaOut, w))) {
-      copyFile(src, path.join(metaOut, w));
-    }
-  }
-  const pypi = path.join(pyWorkers, "pypi");
-  if (fs.existsSync(pypi)) {
-    copyDirFlatOrTree(pypi, path.join(metaOut, "pypi"));
-  }
+// Collection
+const collectionDist = path.join(root, "dist");
+if (fs.existsSync(path.join(collectionDist, "plugin.js"))) {
+  const dest = path.join(outDir, "meta");
+  fs.mkdirSync(dest, { recursive: true });
+  copyDist(collectionDist, dest);
   writeReleaseManifest(
     path.join(root, "molvis.plugin.json"),
-    path.join(metaOut, "molvis.plugin.json"),
+    path.join(dest, "molvis.plugin.json"),
   );
-  flattenInto(metaOut);
-  console.log(`[prepare-release] meta → release-assets/meta/`);
+  console.log(`[prepare-release] collection → release-assets/meta/`);
 }
 
-// Per-plugin packages
+// Children
 const pluginsDir = path.join(root, "plugins");
 for (const name of fs.readdirSync(pluginsDir)) {
   const pkg = path.join(pluginsDir, name);
@@ -115,9 +80,8 @@ for (const name of fs.readdirSync(pluginsDir)) {
   }
   const dest = path.join(outDir, name);
   fs.mkdirSync(dest, { recursive: true });
-  copyDirFlatOrTree(dist, dest);
+  copyDist(dist, dest);
   writeReleaseManifest(man, path.join(dest, "molvis.plugin.json"));
-  flattenInto(dest);
   console.log(`[prepare-release] ${name} → release-assets/${name}/`);
 }
 

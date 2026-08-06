@@ -1,55 +1,69 @@
 # Official plugins — architecture
 
-## Collection shape
+## Layout
 
 ```
-plugins/                     # npm workspaces — independent packages
-  pyodide-molpy/
+plugins/                     # independent packages (npm workspaces)
+  pyodide-molpy/             # HostKernel + notebook UI
   lammps-input-generator/
   alchemist/
   carbon-tube-builder/
-src/index.tsx                # meta: activate every child once
-molvis.plugin.json           # meta manifest (entry dist/plugin.js locally)
+src/index.tsx                # collection: activate every child once
+molvis.plugin.json
+rsbuild.plugin-shared.ts     # one build recipe for all packages
 ```
 
-Meta **bundles** children at build time (source imports). Hosts install either:
+**Collection** (`src/`) source-imports children and builds one `dist/plugin.js`.
+Hosts install either the collection or a single child from GitHub Releases.
 
-| Source | What you get |
-|--------|----------------|
-| `MolCrafts/molvis-plugins-official@vX` | Meta (all plugins) from **GitHub Release** |
-| Release asset `pyodide-molpy.zip` | Single plugin |
+## Build (only two user commands)
 
-## OOP policy (same as template)
+| Command | Meaning |
+|---------|---------|
+| `npm run dev` | watch + CORS HTTP → `http://127.0.0.1:4173/` |
+| `npm run build` | production `dist/` for children + collection |
 
-- **Classes**: modifiers, modes, kernel/session hosts, game engines (alchemist).
-- **Functions**: `register*(api)`, pure generators, wire helpers.
-- **No** god `utils.ts` / free-floating UI registry.
+No `build:meta`, no post-build shell copies.
 
-See [molvis-plugin-template/ARCHITECTURE.md](https://github.com/MolCrafts/molvis-plugin-template/blob/master/ARCHITECTURE.md).
+### Kernel runtime assets (pyodide)
 
-### Pyodide package
+Owned by **rsbuild**, flag `kernelRuntime: true` in:
+
+- `plugins/pyodide-molpy/rsbuild.config.ts`
+- root `rsbuild.config.ts` (collection embeds HostKernel)
+
+That sets `output.copy` from `@jupyterlite/pyodide-kernel` → flat next to `plugin.js`:
 
 ```
-src/kernel/          # HostKernel (JupyterLite worker) + bootstrap + RPC bridge
-src/model/           # notebook / scripts / editor settings (pure data)
-src/ui/              # React surfaces only
-src/rpc/             # main-thread RPCRouter client
-src/demo/            # demo cell sources
+dist/
+  plugin.js
+  comlink.worker.js | coincident.worker.js
+  all.json
+  piplite-*.whl …
 ```
 
-`HostKernel` is the OOP boundary for execution; UI stays functional React.
+Runtime resolution: `runtime_assets.ts` (base URL from host
+`__MOLVIS_PLUGIN_ENTRY__`, cross-origin workers via blob). Upstream
+`_pypi.js` is stubbed so binary wheels are not treated as JS modules.
 
-## dist/ policy
+`pack-local-py.mjs` is **codegen only** (embed monorepo molvis/molpy `.py` into
+TS for the worker FS) — not “copy kernel”.
 
-**Never commit `dist/`.** CI builds; tags run `release.yml` and upload flat
-assets to GitHub Releases. Local:
+## Public SDK
 
-```bash
-npm run build
-npm run serve          # http://127.0.0.1:4173/  (CORS)
+```ts
+import { MolvisPlugin, pluginExternals } from "@molcrafts/molvis/plugin";
+import { Button } from "@molcrafts/molvis/plugin/ui";
 ```
+
+Scaffold: `npx molvis-plugin create`.
+
+## OOP
+
+- **Classes**: modifiers, modes, `HostKernel`, game engines
+- **Functions**: `register*(api)`, pure generators
 
 ## Versioning
 
-- **Meta** `MAJOR.MINOR.PATCH`: major = plugin system, minor = plugin count, patch = fixes.
-- **Children** keep independent versions in their `package.json` / manifests.
+- Collection `MAJOR.MINOR.PATCH`: major = plugin system, minor = plugin count
+- Children keep independent versions in their manifests

@@ -55,4 +55,6 @@ if (bad > 0) {
   );
   process.exit(1);
 }
-console.log(`vendored contract intact (${lock.contractVersion ?? "unversioned"})`);
+console.log(
+  `vendored contract intact (${lock.contractVersion ?? "unversioned"})`,
+);
