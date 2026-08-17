@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@rstest/core";
 import {
   isLoopbackPluginHost,
+  PIPLITE_WHEEL,
   pluginRepoUrl,
 } from "../src/kernel/runtime_assets";
 
@@ -15,6 +16,12 @@ describe("pluginRepoUrl", () => {
     expect(
       pluginRepoUrl("molvis-src/", "https://example.com/releases/v1/"),
     ).toBe("https://example.com/releases/v1/molvis-src/");
+  });
+});
+
+describe("PIPLITE_WHEEL", () => {
+  it("matches the wheel shipped by the installed jupyterlite kernel", () => {
+    expect(PIPLITE_WHEEL).toMatch(/^piplite-.+-py3-none-any\.whl$/);
   });
 });
 

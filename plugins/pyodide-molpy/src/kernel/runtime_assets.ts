@@ -107,6 +107,6 @@ export async function sameOriginWorkerUrl(remoteUrl: string): Promise<string> {
   return URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
 }
 
-export const PIPLITE_WHEEL = "piplite-0.8.2-py3-none-any.whl";
+export { PIPLITE_WHEEL } from "./generated_piplite";
 export const PIPLITE_INDEX = "all.json";
 

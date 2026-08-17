@@ -51,4 +51,5 @@ molvis-src
 # Generated from src/py/*.py by scripts/pack-py.mjs. The .py sources are
 # in-repo, so there is nothing for CI to miss and nothing to hand-sync.
 plugins/pyodide-molpy/src/kernel/generated_py.ts
+plugins/pyodide-molpy/src/kernel/generated_piplite.ts
 plugins/pyodide-molpy/src/notebooks/generated.ts

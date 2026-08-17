@@ -7,9 +7,9 @@
   "description": "MolVis plugin: JupyterLite pyodide-kernel + molpy notebook",
   "license": "BSD-3-Clause",
   "scripts": {
-    "prebuild": "npm run pack:py && npm run pack:notebooks && npm run pack:molvis-src && npm run pack:molvis-wheel",
-    "pretypecheck": "npm run pack:py && npm run pack:notebooks",
-    "pretest": "npm run pack:py && npm run pack:notebooks",
+    "prebuild": "npm run pack:py && npm run pack:notebooks && npm run pack:piplite && npm run pack:molvis-src && npm run pack:molvis-wheel",
+    "pretypecheck": "npm run pack:py && npm run pack:notebooks && npm run pack:piplite",
+    "pretest": "npm run pack:py && npm run pack:notebooks && npm run pack:piplite",
     "build": "tsc --noEmit && rsbuild build",
     "typecheck": "tsc --noEmit",
     "test": "rstest run",
@@ -19,7 +19,8 @@
     "test:py": "python3 -m pytest tests/py -q",
     "pack:notebooks": "node -e \"const f=require('fs'),d='src/notebooks/',n=f.readdirSync(d).filter(x=>x.endsWith('.ipynb')).sort();f.writeFileSync(d+'generated.ts','/* generated from '+n.join(', ')+' by pack:notebooks */\\n'+n.map(x=>'export const '+x.replace('.ipynb','').toUpperCase()+'_IPYNB = '+f.readFileSync(d+x,'utf8').trim()+' as const;').join('\\n')+'\\n')\"",
     "pack:molvis-src": "node pack-molvis-src.mjs",
-    "pack:molvis-wheel": "node pack-molvis-wheel.mjs"
+    "pack:molvis-wheel": "node pack-molvis-wheel.mjs",
+    "pack:piplite": "node pack-piplite.mjs"
   },
   "peerDependencies": {
     "@molcrafts/molvis-core": ">=0.2.0",
@@ -30,7 +31,7 @@
   },
   "dependencies": {
     "@jupyterlab/services": "^7.6.0",
-    "@jupyterlite/pyodide-kernel": "0.8.2",
+    "@jupyterlite/pyodide-kernel": "^0.8.3",
     "@jupyterlite/services": "^0.8.1",
     "@lumino/coreutils": "^2.2.3",
     "@lumino/signaling": "^2.1.6"
