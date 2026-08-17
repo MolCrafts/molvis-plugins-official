@@ -2,7 +2,7 @@ import { defaultMinimize } from "../../model/defaults";
 import type { MinimizeConfig } from "../../model/types";
 import { css } from "../styles";
 import { Select, SelectItem } from "../Select";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@molcrafts/molvis-plugin/ui";
 
 const MIN_STYLES = ["cg", "hftn", "sd", "quickmin", "fire"];
 

@@ -3,73 +3,69 @@
 [![ci](https://github.com/MolCrafts/molvis-plugins-official/actions/workflows/ci.yml/badge.svg)](https://github.com/MolCrafts/molvis-plugins-official/actions/workflows/ci.yml)
 
 Official **collection** of [MolVis](https://github.com/MolCrafts/molvis) page
-plugins. Scaffolded from
-[molvis-plugin-template](https://github.com/MolCrafts/molvis-plugin-template).
+plugins. Scaffold: [molvis-plugin-template](https://github.com/MolCrafts/molvis-plugin-template)
+(`npx molvis-plugin create` once that CLI is on npm).
 
 Architecture: [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ## Install in MolVis
 
-**Settings → Plugins** (or host `molvis.plugins` / `?plugins=`). **Pin a release
-tag** — packages are **GitHub Release assets** (not git tree / jsDelivr `gh/`).
-
-| What | Source string |
-|------|----------------|
-| **All official plugins (meta)** | `MolCrafts/molvis-plugins-official@v0.4.0` |
-| **Latest release** | `MolCrafts/molvis-plugins-official` |
-| **Local debug** | `http://127.0.0.1:4173/dist/plugin.js` after `npm run serve` |
+| What | Source |
+|------|--------|
+| Collection (all plugins) | `MolCrafts/molvis-plugins-official@v0.5.0` |
+| Latest release | `MolCrafts/molvis-plugins-official` |
+| Local | `http://127.0.0.1:4173/` after `npm run dev` |
 
 ```jsonc
-"molvis.plugins": ["MolCrafts/molvis-plugins-official@v0.4.0"]
+"molvis.plugins": ["MolCrafts/molvis-plugins-official@v0.5.0"]
 ```
 
-> Do **not** install both the meta package and the same child package — duplicate chrome.
+Do **not** install both the collection and the same child package.
 
-`dist/` is **gitignored**. CI builds; tagging `v*` uploads flat assets via
-`.github/workflows/release.yml`.
+`dist/` is gitignored. Tags `v*` → GitHub Release assets (flat `plugin.js` +
+kernel workers/wheels when present).
 
 ## Plugins
 
-| Package | Host surfaces |
-|---------|----------------|
-| `carbon-tube-builder` | Edit inspector **Carbon tube** section |
-| `alchemist` | Toolbar **Alchemist** dialog (+ standalone site) |
-| `pyodide-molpy` | Python mode (JupyterLite **pyodide-kernel** worker), Script dialog, Console |
-| `lammps-input-generator` | Toolbar **LAMMPS Template** wizard |
-
-### `pyodide-molpy`
-
-Browser Python via **@jupyterlite/pyodide-kernel** (Worker + IPython streams).
-Molvis Stage talks to the page `RPCRouter` over a postMessage bridge.
-
-```python
-import molpy as mp
-import molvis as mv
-
-stage = mv.Stage()
-frame = mp.io.SmilesReader("CN1C=NC2=C1C(=O)N(C(=O)N2C)C").read()
-stage.draw_frame(frame)
-stage.commit()
-stage.camera.fit()
-print("ok")  # → cell output via kernel IOPub
-```
-
-True KeyboardInterrupt needs **COOP/COEP** on the host page
-(`Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Embedder-Policy: require-corp`).
+| Package | Surfaces |
+|---------|----------|
+| `carbon-tube-builder` | Edit → Carbon tube |
+| `alchemist` | Toolbar Alchemist |
+| `pyodide-molpy` | Python mode (JupyterLite pyodide-kernel), Script, Console |
+| `lammps-input-generator` | Toolbar LAMMPS Template |
 
 ## Develop
 
+Host SDK is on npm (`@molcrafts/molvis-plugin@0.2.0` and the engines). A
+plain `npm install` is enough.
+
+A sibling `../molvis` checkout is **optional**. When present, `npm run dev`
+editable-installs its Python tree via `/molvis-src/` so kernel Python edits
+apply on reset. Without it the kernel installs `molcrafts-molvis==0.2.0`
+from PyPI.
+
 ```bash
 npm install
-npm run test
-npm run build
-npm run prepare:release   # → release-assets/ (not committed)
-npm run serve             # CORS HTTP for local install
+npm run dev     # only entry for local work → http://127.0.0.1:4173/
 ```
+
+`npm run dev` is `rsbuild build --watch` plus a CORS static server; pass a
+port with `PORT=4174 npm run dev`, or run it inside one plugin
+(`npm run dev -w @molcrafts/molvis-plugin-alchemist`).
+
+MolVis Settings → Plugins → `http://127.0.0.1:4173/` → edit → **Reload**.
+
+```bash
+npm run build   # production dist/ (all packages)
+npm run check   # manifests + typecheck + lint:py + tests + build + bundle
+```
+
+Release assets are flattened by `.github/workflows/release.yml` on a `v*`
+tag; there is no local packaging step.
 
 ## Release
 
 ```bash
-git tag v0.4.1
-git push origin v0.4.1    # triggers release.yml → GitHub Release assets
+git tag v0.5.0
+git push origin v0.5.0
 ```

@@ -25,14 +25,34 @@ export const MONACO_ESM_URL = `${JSDELIVR_NPM}/monaco-editor@${MONACO_VERSION}/+
 export const SHIKI_ESM_URL = `${JSDELIVR_NPM}/shiki@${SHIKI_VERSION}/+esm`;
 
 /**
- * PyPI packages installed into the Pyodide runtime via micropip.
- *
- * Pinned deliberately: unpinned installs mean an upstream release silently
- * changes the runtime under an already-published plugin bundle. `molrs` in
- * particular has had breaking changes within 0.0.x patch releases.
+ * Loaded from the Pyodide lock file (`loadPyodide({ packages })`).
+ * These have emscripten / lock-file wheels — **not** PyPI `py3-none-any`.
+ * Pinning `numpy==2.5.1` on micropip 404s: PyPI numpy is CPython +
+ * manylinux, and this Pyodide ships numpy 2.4.3.
+ */
+export const PYODIDE_PACKAGES = [
+  "micropip",
+  "numpy",
+  "pyyaml",
+  "rich",
+] as const;
+
+/**
+ * Pure-Python (or emscripten-published) packages micropip pulls from PyPI.
+ * Every entry is `==`. Native CPython wheels do not belong here.
  */
 export const MICROPIP_REQUIREMENTS = [
-  "molcrafts-molrs",
-  "molcrafts-mollog",
-  "molcrafts-molcfg",
+  "molcrafts-molrs==0.13.1",
+  "molcrafts-mollog==1.3.0",
+  "molcrafts-molcfg==1.5.0",
+  "molcrafts-molpy==0.13.1",
+  "molcrafts-molvis==0.2.0",
 ] as const;
+
+/**
+ * Optional sibling of plugin.js. The kernel prefers PyPI
+ * (`molcrafts-molvis==0.2.0` above). A local `molvis-src/` tree overlays
+ * that pin so Python edits apply on kernel reset. The wheel is a Release
+ * fallback when PyPI is unreachable.
+ */
+export const MOLVIS_WHEEL = "molcrafts_molvis-0.2.0-py3-none-any.whl";

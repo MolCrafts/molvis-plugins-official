@@ -1,55 +1,117 @@
 # Official plugins — architecture
 
-## Collection shape
+## Layout
 
 ```
-plugins/                     # npm workspaces — independent packages
-  pyodide-molpy/
+plugins/                     # independent packages (npm workspaces)
+  pyodide-molpy/             # HostKernel + notebook UI
   lammps-input-generator/
   alchemist/
   carbon-tube-builder/
-src/index.tsx                # meta: activate every child once
-molvis.plugin.json           # meta manifest (entry dist/plugin.js locally)
+src/index.tsx                # collection: activate every child once
+molvis.plugin.json
+rsbuild.plugin-shared.ts     # one build recipe for all packages
 ```
 
-Meta **bundles** children at build time (source imports). Hosts install either:
+**Collection** (`src/`) source-imports children and builds one `dist/plugin.js`.
+Hosts install either the collection or a single child from GitHub Releases.
 
-| Source | What you get |
-|--------|----------------|
-| `MolCrafts/molvis-plugins-official@vX` | Meta (all plugins) from **GitHub Release** |
-| Release asset `pyodide-molpy.zip` | Single plugin |
+## Build (only two user commands)
 
-## OOP policy (same as template)
+| Command | Meaning |
+|---------|---------|
+| `npm run dev` | watch + CORS HTTP → `http://127.0.0.1:4173/` |
+| `npm run build` | production `dist/` for children + collection |
 
-- **Classes**: modifiers, modes, kernel/session hosts, game engines (alchemist).
-- **Functions**: `register*(api)`, pure generators, wire helpers.
-- **No** god `utils.ts` / free-floating UI registry.
+No `build:meta`, no post-build shell copies.
 
-See [molvis-plugin-template/ARCHITECTURE.md](https://github.com/MolCrafts/molvis-plugin-template/blob/master/ARCHITECTURE.md).
+### Kernel runtime assets (pyodide)
 
-### Pyodide package
+Owned by **rsbuild**, flag `kernelRuntime: true` in:
+
+- `plugins/pyodide-molpy/rsbuild.config.ts`
+- root `rsbuild.config.ts` (collection embeds HostKernel)
+
+That sets `output.copy` from `@jupyterlite/pyodide-kernel` → flat next to `plugin.js`:
 
 ```
-src/kernel/          # HostKernel (JupyterLite worker) + bootstrap + RPC bridge
-src/model/           # notebook / scripts / editor settings (pure data)
-src/ui/              # React surfaces only
-src/rpc/             # main-thread RPCRouter client
-src/demo/            # demo cell sources
+dist/
+  plugin.js
+  comlink.worker.js | coincident.worker.js
+  all.json
+  piplite-*.whl …
 ```
 
-`HostKernel` is the OOP boundary for execution; UI stays functional React.
+Runtime resolution: `runtime_assets.ts` (base URL from host
+`__MOLVIS_PLUGIN_ENTRY__`, cross-origin workers via blob). Upstream
+`_pypi.js` is stubbed so binary wheels are not treated as JS modules.
 
-## dist/ policy
+`molpy` and `molvis` are pinned PyPI packages in `MICROPIP_REQUIREMENTS`
+(`src/cdn.ts`), installed by micropip alongside numpy/molrs/mollog/molcfg.
+They used to ship as wheels committed under `plugins/pyodide-molpy/wheels/`
+and built by a script from sibling checkouts — but that directory was never
+tracked (a fresh clone could not build), the molpy wheel duplicated the PyPI
+release exactly, and CI had no molpy checkout to rebuild from, so a stale
+wheel could not be detected. Note the ordering consequence: the plugin
+release must follow the `molcrafts-molvis` PyPI release it pins.
 
-**Never commit `dist/`.** CI builds; tags run `release.yml` and upload flat
-assets to GitHub Releases. Local:
+## Public SDK
+
+```ts
+import { MolvisPlugin } from "@molcrafts/molvis-plugin";
+import { pluginExternals } from "@molcrafts/molvis-plugin/externals";
+import { Button } from "@molcrafts/molvis-plugin/ui";
+
+export default class Plugin extends MolvisPlugin {
+  readonly id = "com.example.mine";
+  readonly name = "Mine";
+  readonly version = "0.1.0";
+  activate(api) { /* domain registers */ }
+}
+```
+
+Root `package.json` pins `@molcrafts/molvis-plugin` / `core` / `stage` at
+`0.2.0` from npm. A sibling molvis checkout is optional (kernel Python
+editable install only).
+
+Scaffold: [molvis-plugin-template](https://github.com/MolCrafts/molvis-plugin-template).
+
+`pluginExternals` is the whole externals list — never retype it, and never
+add a package to a local externals map instead. It includes
+`@molcrafts/molvis-plugin` itself: the SDK is a host module, so a plugin that
+bundles it ships a private copy of the shadcn primitives plus their Radix /
+`clsx` / `tailwind-merge` tree. That is measurable — a plugin that imported
+`@radix-ui/react-select` directly instead of the SDK's `Select` built to
+160 KB, against 7.4 KB for one that did not. Two such plugins installed
+separately also give the host two Radix trees, which `resolve.dedupe` cannot
+prevent because it only dedupes *within* a bundle.
+
+## Testing
+
+Unit only, `rstest` in a node environment, one lane:
 
 ```bash
-npm run build
-npm run serve          # http://127.0.0.1:4173/  (CORS)
+npm test        # every plugin's tests + the python bridge tests
 ```
+
+There is no e2e. The Alchemist Playwright suite was removed: it gated both
+`ci.yml` and `release.yml` while being **red** — its fake `PluginAPI` omitted
+`dialogs`, which `src/index.tsx` calls during `activate`, so a tag push could
+not publish. Several of its assertions also targeted selectors present in zero
+source files, so they could not fail. What it meant to prove is covered by
+`src/index.test.ts` through `fakePluginAPI`, which is built from the real
+`PluginAPI` type and therefore turns a new domain into a compile error rather
+than a silent pass.
+
+Host-shell behaviour that a unit test cannot reach is a signal that the seam is
+wrong, not a reason to add a browser driver.
+
+## OOP
+
+- **Classes**: `MolvisPlugin` subclasses (default export), modifiers, modes, `HostKernel`, game engines
+- **Functions**: `register*(api)`, pure generators
 
 ## Versioning
 
-- **Meta** `MAJOR.MINOR.PATCH`: major = plugin system, minor = plugin count, patch = fixes.
-- **Children** keep independent versions in their `package.json` / manifests.
+- Collection: plain semver (git tag `v<version>`). `minor` is not plugin count.
+- Children keep independent versions in their manifests

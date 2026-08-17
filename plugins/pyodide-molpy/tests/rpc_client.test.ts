@@ -25,7 +25,7 @@ describe("createRpcClient", () => {
     };
     const prev = g[hostKey];
     g[hostKey] = {
-      "@molvis/stage": {
+      "@molcrafts/molvis-stage": {
         RPCRouter: class {
           execute = execute;
         },

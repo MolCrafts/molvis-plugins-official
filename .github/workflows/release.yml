@@ -16,25 +16,50 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins-official
     steps:
       - uses: actions/checkout@v4
         with:
+          path: plugins-official
           fetch-depth: 0
-
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff pytest
+        working-directory: .
 
       - run: npm install
-      - run: npx playwright install --with-deps chromium
-      - run: npm run check:contract
       - run: npm run check:manifests
-      - run: npm run check:meta-version
+      - run: npm run check:official-plugins
       - run: npm run typecheck
+      - run: npm run lint:py
       - run: npm run test
       - run: npm run build
-      - run: npm run test:e2e
-      - run: node scripts/prepare-release-assets.mjs
+      - run: npm run verify:bundle
+
+      # The host resolves a *flat* Release layout, so each package's dist/ is
+      # copied top-level-only and its manifest entry loses the `dist/` prefix.
+      # Sourcemaps and .DS_Store must not ship.
+      - name: Stage flat release assets
+        run: |
+          set -euo pipefail
+          rm -rf release-assets && mkdir -p release-assets
+          stage() {
+            [ -f "$1/dist/plugin.js" ] || return 0
+            mkdir -p "release-assets/$2"
+            find "$1/dist" -maxdepth 1 -type f \
+              ! -name '*.map' ! -name '*.LICENSE.txt' ! -name '.DS_Store' \
+              -exec cp {} "release-assets/$2/" \;
+            node -e "const f=require('fs'),m=JSON.parse(f.readFileSync('$1/molvis.plugin.json'));m.entry='plugin.js';f.writeFileSync('release-assets/$2/molvis.plugin.json',JSON.stringify(m,null,2)+'\n')"
+            echo "staged $1 -> release-assets/$2/"
+          }
+          stage . meta
+          for d in plugins/*/; do stage "${d%/}" "$(basename "$d")"; done
 
       - name: Create / update GitHub Release with flat plugin assets
         env:
@@ -54,10 +79,12 @@ jobs:
               gh release upload "$TAG" ./* --clobber
             )
           fi
-          # Also attach per-plugin zips for single-plugin install
+          # Per-plugin zips for single-plugin install. `zip -r <z> <dir>`
+          # stores paths as `release-assets/<name>/plugin.js`; the host
+          # resolves a FLAT layout, so zip from inside the directory.
           for dir in release-assets/*/; do
             name=$(basename "$dir")
             [ "$name" = "meta" ] && continue
-            zip -r "release-assets/${name}.zip" "$dir"
+            (cd "$dir" && zip -r "../${name}.zip" .)
             gh release upload "$TAG" "release-assets/${name}.zip" --clobber
           done

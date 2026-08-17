@@ -27,15 +27,29 @@ yarn-error.log*
 pnpm-debug.log*
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
+# Build analysis reports (RSDOCTOR=true)
+.rsdoctor/
+**/.rsdoctor/
+
 # Test / coverage artifacts
 coverage/
 *.lcov
 .nyc_output/
-playwright-report/
-test-results/
 rstest-report/
+.pytest_cache/
+__pycache__/
 
 # Built artifacts — never commit. CI builds; GitHub Releases host packages.
 dist/
 plugins/*/dist/
 release-assets/
+plugins/pyodide-molpy/runtime-wheels/
+molvis-src-manifest.json
+# Optional local symlink → ../molvis/python/src/molvis
+molvis-src
+
+# Generated from src/py/*.py by scripts/pack-py.mjs. The .py sources are
+# in-repo, so there is nothing for CI to miss and nothing to hand-sync.
+plugins/pyodide-molpy/src/kernel/generated_py.ts
+plugins/pyodide-molpy/src/kernel/generated_piplite.ts
+plugins/pyodide-molpy/src/notebooks/generated.ts

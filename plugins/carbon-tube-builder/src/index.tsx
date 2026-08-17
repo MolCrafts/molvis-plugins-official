@@ -4,7 +4,12 @@ import {
 } from "@molcrafts/molvis-core/molrs";
 import { useState } from "react";
 
-import type { Molvis, MolvisPluginModule, PluginAPI } from "./types/plugin-api";
+import {
+  MolvisPlugin,
+  type Molvis,
+  type PluginAPI,
+} from "@molcrafts/molvis-plugin";
+import { Button, Checkbox } from "@molcrafts/molvis-plugin/ui";
 import "./styles.css";
 import { PLUGIN_ID, PLUGIN_NAME, PLUGIN_VERSION } from "./version";
 
@@ -121,17 +126,16 @@ const CarbonTubePanel: React.FC<{ app: Molvis | null }> = ({ app }) => {
       </div>
 
       <label className="carbon-tube-builder__check">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={periodic}
-          onChange={(event) => setPeriodic(event.currentTarget.checked)}
+          onCheckedChange={(value) => setPeriodic(value === true)}
         />
         <span>Periodic along tube axis</span>
       </label>
 
-      <button type="submit" disabled={!app}>
+      <Button type="submit" size="sm" disabled={!app}>
         Build &amp; place
-      </button>
+      </Button>
       <p
         className="carbon-tube-builder__status"
         data-error={failed || undefined}
@@ -152,19 +156,19 @@ export function registerCarbonTubeBuilder(api: PluginAPI): void {
   });
 }
 
-const plugin: MolvisPluginModule = {
-  id: PLUGIN_ID,
-  name: PLUGIN_NAME,
-  version: PLUGIN_VERSION,
+class CarbonTubeBuilderPlugin extends MolvisPlugin {
+  readonly id = PLUGIN_ID;
+  readonly name = PLUGIN_NAME;
+  readonly version = PLUGIN_VERSION;
 
   activate(api: PluginAPI) {
     registerCarbonTubeBuilder(api);
     api.log.info("carbon-tube-builder activate");
-  },
+  }
 
   deactivate(api: PluginAPI) {
     api.log.info("carbon-tube-builder deactivate");
-  },
-};
+  }
+}
 
-export default plugin;
+export default new CarbonTubeBuilderPlugin();

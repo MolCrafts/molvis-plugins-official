@@ -4,7 +4,7 @@
  *
  * Token names match host `page/src/styles/tailwind.css` (`--molvis-*`).
  */
-import { FONT, statusToken, token } from "../types/contract_tokens";
+import { FONT, statusToken, token } from "@molcrafts/molvis-plugin";
 
 // One vendored token table for every plugin. The previous local copies chained
 // through `var(--background)` / `var(--border)`, which the host never defines,
@@ -26,44 +26,6 @@ const labelSize = "var(--text-label, 0.75rem)";
 const controlSize = "var(--text-body-lg, 0.875rem)";
 
 export const css = {
-  overlay: {
-    position: "fixed" as const,
-    inset: 0,
-    zIndex: 10000,
-    background: scrim,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 16,
-    fontFamily: FONT.sans,
-    color: fg,
-  },
-  panel: {
-    width: "min(46rem, calc(100vw - 2rem))",
-    height: "min(85vh, 40rem)",
-    background: panel,
-    borderRadius: 10,
-    boxShadow: shadow,
-    display: "flex",
-    flexDirection: "column" as const,
-    overflow: "hidden",
-    border: `1px solid ${border}`,
-  },
-  header: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "12px 18px",
-    borderBottom: `1px solid ${border}`,
-    gap: 12,
-    flexShrink: 0,
-  },
-  title: {
-    margin: 0,
-    fontSize: 15,
-    fontWeight: 650,
-    letterSpacing: "-0.01em",
-  },
   bodyRow: {
     display: "flex",
     width: "100%",
@@ -250,29 +212,6 @@ export const css = {
     width: "min(100%, 22rem)",
     boxSizing: "border-box" as const,
   },
-  select: {
-    border: `1px solid ${border}`,
-    borderRadius: 4,
-    minHeight: 28,
-    padding: "3px 8px",
-    fontSize: controlSize,
-    background: inputBg,
-    color: "inherit",
-    maxWidth: "100%",
-  },
-  textarea: {
-    border: `1px solid ${border}`,
-    borderRadius: 6,
-    padding: "8px 9px",
-    fontSize: controlSize,
-    fontFamily: FONT.mono,
-    background: inputBg,
-    color: "inherit",
-    width: "100%",
-    boxSizing: "border-box" as const,
-    minHeight: 72,
-    resize: "vertical" as const,
-  },
   hint: {
     fontSize: labelSize,
     opacity: 0.72,
@@ -324,11 +263,6 @@ export const css = {
     flexDirection: "column" as const,
     gap: 6,
   },
-  listRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-  },
   commandRow: {
     display: "grid",
     gridTemplateColumns: "108px minmax(0, 1fr) 24px",
@@ -364,18 +298,6 @@ export const css = {
     fontSize: 17,
     lineHeight: 1,
     cursor: "pointer",
-  },
-  listInput: {
-    border: `1px solid ${border}`,
-    borderRadius: 6,
-    padding: "5px 8px",
-    fontSize: bodySize,
-    fontFamily: FONT.mono,
-    background: inputBg,
-    color: "inherit",
-    flex: 1,
-    minWidth: 0,
-    boxSizing: "border-box" as const,
   },
   emptyList: {
     fontSize: labelSize,
@@ -445,7 +367,6 @@ export const css = {
     maxHeight: 420,
     fontFamily: FONT.mono,
   },
-  // legacy aliases used by older step components
   row: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
@@ -458,38 +379,4 @@ export const css = {
     gap: 8,
     marginTop: 6,
   },
-  body: {
-    padding: "16px 18px",
-    overflow: "auto",
-    flex: 1,
-    minHeight: 0,
-  },
-  footer: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 10,
-    padding: "12px 18px",
-    borderTop: `1px solid ${border}`,
-    background: panelRaised,
-  },
-  steps: {
-    display: "flex",
-    gap: 6,
-    flexWrap: "wrap" as const,
-    padding: "10px 18px",
-    borderBottom: `1px solid ${border}`,
-    background: panelRaised,
-  },
-  stepBtn: (active: boolean, done: boolean) =>
-    ({
-      border: "none",
-      background: active ? accent : done ? accentSoft : "transparent",
-      color: active ? accentFg : fg,
-      borderRadius: 999,
-      padding: "5px 11px",
-      fontSize: bodySize,
-      fontWeight: 600,
-      cursor: "pointer",
-      opacity: active || done ? 1 : 0.7,
-    }) as const,
 };

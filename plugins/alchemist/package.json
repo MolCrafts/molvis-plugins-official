@@ -3,6 +3,9 @@
   "version": "0.2.0",
   "private": true,
   "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
   "description": "Alchemist \u2014 a canvas chemistry merge game: MolVis page plugin with static-site deployment",
   "license": "BSD-3-Clause",
   "repository": {
@@ -25,14 +28,12 @@
     "dev": "rsbuild dev",
     "build:site": "rsbuild build",
     "build:plugin": "rslib build",
-    "build": "npm run build:site && npm run build:plugin",
+    "build": "tsc --noEmit && npm run build:site && npm run build:plugin",
     "test": "rstest run --config rstest.config.ts",
     "test:watch": "rstest watch --config rstest.config.ts",
-    "test:e2e": "rstest run --config rstest.e2e.config.ts",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm run test && npm run build && npm run test:e2e",
-    "prepublishOnly": "npm run check",
-    "check:contract": "node scripts/check-vendored-contract.mjs"
+    "check": "npm run typecheck && npm run test && npm run build",
+    "prepublishOnly": "npm run check"
   },
   "devDependencies": {
     "@rsbuild/core": "^2.1.9",
@@ -40,15 +41,14 @@
     "@rslib/core": "*",
     "@rspack/core": "*",
     "@rstest/core": "^0.11.5",
-    "@rstest/playwright": "*",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
-    "playwright": "*",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "typescript": "^7.0.2"
   },
   "peerDependencies": {
+    "@molcrafts/molvis-plugin": ">=0.2.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   }

@@ -13,8 +13,8 @@ export default defineConfig({
       charset: { charset: "utf-8" },
       viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
       description:
-        "Merge seven elements in atomic-number order and reach K.",
-      "theme-color": "#f6efe2",
+        "Merge eleven elements in atomic-number order and reach gold.",
+      "theme-color": "#dfe6e4",
     },
   },
   output: {

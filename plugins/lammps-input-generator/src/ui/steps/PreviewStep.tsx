@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { Button } from "@molcrafts/molvis-plugin/ui";
 import { Clipboard, Download } from "lucide-react";
 import { css } from "../styles";
 

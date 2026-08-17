@@ -9,24 +9,26 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins-official
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: plugins-official
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff pytest
+        working-directory: .
       - run: npm install
-      - run: npx playwright install --with-deps chromium
-      - run: npm run check:contract
       - run: npm run check:manifests
-      - run: npm run check:meta-version
+      - run: npm run check:official-plugins
       - run: npm run typecheck
+      - run: npm run lint:py
       - run: npm run test
       - run: npm run build
-      - run: npm run test:e2e
-      - run: node scripts/prepare-release-assets.mjs
-      - name: Upload release-assets (CI artifact; not committed)
-        uses: actions/upload-artifact@v4
-        with:
-          name: plugin-release-assets
-          path: release-assets/
-          if-no-files-found: error
+      - run: npm run verify:bundle

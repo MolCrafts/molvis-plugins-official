@@ -1,5 +1,6 @@
 import { XTERM_CSS_URL, XTERM_ESM_URL, XTERM_FIT_ESM_URL } from "../cdn";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ConsoleSinkLedger, type ConsoleSink } from "./console_sink";
 import { useKernel } from "./hooks/useKernel";
 import {
   readXtermTheme,
@@ -85,13 +86,14 @@ export function ConsolePanel(_props: { app: unknown }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const preRef = useRef<HTMLPreElement | null>(null);
   const termRef = useRef<TermLike | null>(null);
-  const writtenIds = useRef(new Set<string>());
+  /** Sink-aware "already shown" ledger; replays the backlog on sink change. */
+  const ledger = useRef(new ConsoleSinkLedger());
   const [menu, setMenu] = useState<CtxMenu | null>(null);
   const [hasTerm, setHasTerm] = useState(false);
 
   const doClear = useCallback(() => {
     clearLogs();
-    writtenIds.current.clear();
+    ledger.current.reset();
     if (preRef.current) preRef.current.textContent = "";
     const term = termRef.current;
     if (term?.clear) term.clear();
@@ -157,15 +159,23 @@ export function ConsolePanel(_props: { app: unknown }) {
       ro?.disconnect();
       termRef.current?.dispose();
       termRef.current = null;
-      writtenIds.current.clear();
+      ledger.current.reset();
     };
   }, []);
 
   useEffect(() => {
     const term = termRef.current;
-    for (const line of logs) {
-      if (writtenIds.current.has(line.id)) continue;
-      writtenIds.current.add(line.id);
+    const sink: ConsoleSink | null = term
+      ? "term"
+      : preRef.current
+        ? "pre"
+        : null;
+    // No sink yet: leave the ledger untouched so the next run still writes.
+    if (!sink) return;
+    if (sink === "term" && preRef.current?.textContent) {
+      preRef.current.textContent = "";
+    }
+    for (const line of ledger.current.take(logs, sink)) {
       const prefix =
         line.source === "system"
           ? "[sys] "
@@ -191,7 +201,9 @@ export function ConsolePanel(_props: { app: unknown }) {
         preRef.current.scrollTop = preRef.current.scrollHeight;
       }
     }
-  }, [logs]);
+    // `hasTerm` is a dependency, not decoration: it is the only signal that
+    // the sink changed and the backlog needs replaying.
+  }, [logs, hasTerm]);
 
   useEffect(() => {
     if (!menu) return;

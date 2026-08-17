@@ -7,33 +7,52 @@
  */
 
 import alchemistPlugin from "../plugins/alchemist/src/index";
-import { registerCarbonTubeBuilder } from "../plugins/carbon-tube-builder/src/index";
-import { registerLammpsEqInput } from "../plugins/lammps-input-generator/src/index";
-import { registerPyodideMolpy } from "../plugins/pyodide-molpy/src/index";
-import type { MolvisPluginModule, PluginAPI } from "./types/plugin-api";
+import carbonTubePlugin from "../plugins/carbon-tube-builder/src/index";
+import lammpsPlugin from "../plugins/lammps-input-generator/src/index";
+import pyodidePlugin from "../plugins/pyodide-molpy/src/index";
+import {
+  MolvisPlugin,
+  type MolvisPluginModule,
+  type PluginAPI,
+} from "@molcrafts/molvis-plugin";
 import { PLUGIN_ID, PLUGIN_VERSION } from "./version";
 
-const plugin: MolvisPluginModule = {
-  id: PLUGIN_ID,
-  name: "MolVis Plugins Official",
-  version: PLUGIN_VERSION,
+/**
+ * The children, in activate order. Deactivate walks it in reverse.
+ *
+ * Holding them in one list is what keeps activate and deactivate symmetric:
+ * this used to call four `register*()` functions and then tear down only
+ * alchemist, so `pyodide-molpy`'s `getKernel().setApp(null)` never ran and a
+ * module-level kernel singleton kept a reference to a dead app across
+ * deactivate/reactivate.
+ */
+const CHILDREN: readonly MolvisPluginModule[] = [
+  lammpsPlugin,
+  carbonTubePlugin,
+  alchemistPlugin,
+  pyodidePlugin,
+];
+
+class OfficialPlugins extends MolvisPlugin {
+  readonly id = PLUGIN_ID;
+  readonly name = "MolVis Plugins Official";
+  readonly version = PLUGIN_VERSION;
 
   activate(api: PluginAPI) {
     api.log.info("plugins-official meta activate");
-    registerLammpsEqInput(api);
-    registerCarbonTubeBuilder(api);
-    alchemistPlugin.activate(api);
-    // Every child registers unconditionally. The contract is vendored from
-    // one source now, so probing `api.dialogs && api.panels` at runtime would
+    // Every child registers unconditionally. The contract comes from one
+    // source now, so probing `api.dialogs && api.panels` at runtime would
     // only hide a genuine host/plugin mismatch behind a silently missing
     // feature — which is how pyodide-molpy could disappear with one warn().
-    registerPyodideMolpy(api);
-  },
+    for (const child of CHILDREN) child.activate(api);
+  }
 
   deactivate(api: PluginAPI) {
-    alchemistPlugin.deactivate?.(api);
+    for (const child of [...CHILDREN].reverse()) child.deactivate?.(api);
     api.log.info("plugins-official meta deactivate");
-  },
-};
+  }
+}
 
-export default plugin;
+export { CHILDREN };
+
+export default new OfficialPlugins();

@@ -1,4 +1,5 @@
 import { PLUGIN_VERSION } from "../version";
+import { defaultInit } from "../model/defaults";
 import { tempPointsToStages } from "../model/schedule";
 import type {
   EqStage,
@@ -229,17 +230,9 @@ function emitWriteData(output: OutputConfig): string[] {
  */
 export function generateLammpsEqInput(config: LammpsEqConfig): string {
   const { init, minimize, tempPoints, output } = config;
-  const neighbor = init.neighbor ?? {
-    skin: init.neighborSkin ?? 2,
-    style: "bin" as const,
-    every: 1,
-    delay: 0,
-    check: init.neighborCheck ?? true,
-    once: false,
-    page: 100000,
-    one: 2000,
-    binsize: 0,
-  };
+  // `neighbor` is filled by both defaultConfig() and normalizeConfig(), and
+  // every entry point runs one of them, so there is no fallback here.
+  const neighbor = init.neighbor ?? defaultInit(init.units).neighbor!;
   const stages = tempPointsToStages(tempPoints);
   const [bx, by, bz] = init.boundary;
   const lines: string[] = [

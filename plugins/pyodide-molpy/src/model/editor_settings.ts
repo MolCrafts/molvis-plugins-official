@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { PluginStorage } from "../types/plugin-api";
+import type { PluginStorage } from "@molcrafts/molvis-plugin";
 
 export const EDITOR_SETTINGS_KEY = "editor-settings.v1";
 

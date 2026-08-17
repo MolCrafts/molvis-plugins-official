@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
 import "./alchemist.css";
 import { type AlchemistHandle, mountAlchemist } from "./AlchemistGame";
-import type {
-  MolvisPluginModule,
-  PluginAPI,
-  PluginStorage,
-} from "./types/plugin-api";
+import {
+  MolvisPlugin,
+  type PluginAPI,
+  type PluginStorage,
+} from "@molcrafts/molvis-plugin";
 import {
   COMMANDS,
   DIALOG_ID,
@@ -111,10 +111,10 @@ function AlchemistDialog({
   );
 }
 
-const plugin: MolvisPluginModule = {
-  id: PLUGIN_ID,
-  name: PLUGIN_NAME,
-  version: PLUGIN_VERSION,
+class AlchemistPlugin extends MolvisPlugin {
+  readonly id = PLUGIN_ID;
+  readonly name = PLUGIN_NAME;
+  readonly version = PLUGIN_VERSION;
 
   activate(api: PluginAPI) {
     api.log.info("Alchemist plugin activated");
@@ -139,12 +139,11 @@ const plugin: MolvisPluginModule = {
         opensDialog: DIALOG_ID,
       },
     });
-
-  },
+  }
 
   deactivate(api: PluginAPI) {
     api.log.info("Alchemist plugin deactivated");
-  },
-};
+  }
+}
 
-export default plugin;
+export default new AlchemistPlugin();

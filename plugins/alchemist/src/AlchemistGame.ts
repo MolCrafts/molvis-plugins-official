@@ -17,6 +17,11 @@ import {
   type ToolKind,
 } from "./model";
 import {
+  ChamberPhysics,
+  COLLISION_ITERATIONS,
+  FIXED_STEP,
+} from "./physics";
+import {
   loadProgress,
   saveBestScore,
   saveDiscovered,
@@ -24,15 +29,15 @@ import {
   type StorageAdapter,
 } from "./storage";
 
-const BOARD_WIDTH = 336;
+/**
+ * Playfield width. Exported because `model.test.ts` asserts that two
+ * second-largest atoms fit side by side — the invariant that keeps the final
+ * merge reachable — and a copied literal would keep passing after a resize.
+ */
+export const BOARD_WIDTH = 336;
 const BOARD_HEIGHT = 496;
 const DANGER_Y = 77;
 const DANGER_LIMIT_SECONDS = 1.75;
-const FIXED_STEP = 1 / 120;
-const GRAVITY = 760;
-const BODY_RESTITUTION = 0.17;
-const WALL_RESTITUTION = 0.22;
-const FLOOR_RESTITUTION = 0.18;
 const GLOW_REWARD_SECONDS = 8;
 const GLOW_SPAWN_CHANCE = 0.05;
 const DROP_COOLDOWN_SECONDS = 0.8;
@@ -50,6 +55,7 @@ interface AtomBody {
   compressed: boolean;
   glowing: boolean;
   glowSeconds: number;
+  sleeping: boolean;
 }
 
 interface Particle {
@@ -256,6 +262,7 @@ class AlchemistGame {
   private readonly storage: StorageAdapter;
   private readonly random: () => number;
   private readonly audio: AlchemistAudio;
+  private readonly physics = new ChamberPhysics(BOARD_WIDTH, BOARD_HEIGHT);
   private readonly abortController = new AbortController();
   private readonly resizeObserver: ResizeObserver;
   private readonly discovered: Set<number>;
@@ -639,12 +646,20 @@ class AlchemistGame {
         this.setStatus("Already compressed");
         return;
       }
+      const previousRadius = body.radius;
       body.radius *= 0.75;
       body.mass = body.radius ** 2;
       body.compressed = true;
+      this.physics.wakeNear(
+        this.bodies,
+        body.x,
+        body.y,
+        previousRadius + 14,
+      );
       this.inventory = consumeTool(this.inventory, tool);
       this.addEffect(body.x, body.y, "COMPRESSED", getElement(body.rank).color);
     } else if (tool === "decay") {
+      this.physics.wakeNear(this.bodies, body.x, body.y, body.radius + 14);
       this.bodies = this.bodies.filter((candidate) => candidate.id !== body.id);
       this.inventory = consumeTool(this.inventory, tool);
       this.addEffect(body.x, body.y, "DECAYED", "#c16882");
@@ -710,17 +725,13 @@ class AlchemistGame {
       body.grace = Math.max(0, body.grace - delta);
       body.glowSeconds = Math.max(0, body.glowSeconds - delta);
       if (body.glowSeconds === 0) body.glowing = false;
-      body.vy += GRAVITY * delta;
-      body.vx *= 0.999;
-      body.vy *= 0.9996;
-      body.x += body.vx * delta;
-      body.y += body.vy * delta;
-      this.resolveBounds(body);
+      this.physics.integrate(body, delta);
+      this.physics.resolveBounds(body);
     }
 
     const claimed = new Set<number>();
     const mergePairs: Array<[AtomBody, AtomBody]> = [];
-    for (let iteration = 0; iteration < 5; iteration += 1) {
+    for (let iteration = 0; iteration < COLLISION_ITERATIONS; iteration += 1) {
       for (let leftIndex = 0; leftIndex < this.bodies.length; leftIndex += 1) {
         for (
           let rightIndex = leftIndex + 1;
@@ -733,8 +744,7 @@ class AlchemistGame {
           const dx = right.x - left.x;
           const dy = right.y - left.y;
           const minimumDistance = left.radius + right.radius;
-          const distanceSquared = dx * dx + dy * dy;
-          if (distanceSquared >= minimumDistance * minimumDistance) continue;
+          if (dx * dx + dy * dy >= minimumDistance * minimumDistance) continue;
 
           if (
             iteration === 0 &&
@@ -749,15 +759,8 @@ class AlchemistGame {
             continue;
           }
           if (claimed.has(left.id) || claimed.has(right.id)) continue;
-          this.resolveBodyCollision(
-            left,
-            right,
-            dx,
-            dy,
-            distanceSquared,
-            minimumDistance,
-            iteration === 0,
-          );
+          const impact = this.physics.collide(left, right, iteration === 0);
+          if (iteration === 0 && impact > 0) this.audio.collision(impact);
         }
       }
     }
@@ -772,6 +775,7 @@ class AlchemistGame {
       }
     }
 
+    this.physics.settle(this.bodies);
     if (this.phase !== "playing") return;
     this.crowded = this.bodies.some(
       (body) =>
@@ -790,70 +794,6 @@ class AlchemistGame {
       delta,
     );
     if (this.dangerSeconds >= DANGER_LIMIT_SECONDS) this.finish("lost");
-  }
-
-  private resolveBounds(body: AtomBody): void {
-    if (body.x - body.radius < 0) {
-      body.x = body.radius;
-      body.vx = Math.abs(body.vx) * WALL_RESTITUTION;
-    } else if (body.x + body.radius > BOARD_WIDTH) {
-      body.x = BOARD_WIDTH - body.radius;
-      body.vx = -Math.abs(body.vx) * WALL_RESTITUTION;
-    }
-
-    if (body.y + body.radius > BOARD_HEIGHT) {
-      body.y = BOARD_HEIGHT - body.radius;
-      if (body.vy > 0) body.vy *= -FLOOR_RESTITUTION;
-      body.vx *= 0.985;
-      if (Math.abs(body.vy) < 5) body.vy = 0;
-    }
-  }
-
-  private resolveBodyCollision(
-    left: AtomBody,
-    right: AtomBody,
-    dx: number,
-    dy: number,
-    distanceSquared: number,
-    minimumDistance: number,
-    playSound: boolean,
-  ): void {
-    const distance = Math.sqrt(Math.max(0.0001, distanceSquared));
-    const nx = dx / distance;
-    const ny = dy / distance;
-    const overlap = minimumDistance - distance;
-    const inverseLeft = 1 / left.mass;
-    const inverseRight = 1 / right.mass;
-    const inverseTotal = inverseLeft + inverseRight;
-    const correction = Math.max(0, overlap - 0.08) * 0.72;
-
-    left.x -= nx * correction * (inverseLeft / inverseTotal);
-    left.y -= ny * correction * (inverseLeft / inverseTotal);
-    right.x += nx * correction * (inverseRight / inverseTotal);
-    right.y += ny * correction * (inverseRight / inverseTotal);
-
-    const relativeX = right.vx - left.vx;
-    const relativeY = right.vy - left.vy;
-    const normalSpeed = relativeX * nx + relativeY * ny;
-    if (normalSpeed >= 0) return;
-
-    const impulse = (-(1 + BODY_RESTITUTION) * normalSpeed) / inverseTotal;
-    left.vx -= impulse * nx * inverseLeft;
-    left.vy -= impulse * ny * inverseLeft;
-    right.vx += impulse * nx * inverseRight;
-    right.vy += impulse * ny * inverseRight;
-
-    const tangentX = -ny;
-    const tangentY = nx;
-    const tangentSpeed = relativeX * tangentX + relativeY * tangentY;
-    const frictionImpulse =
-      Math.max(-impulse * 0.12, Math.min(impulse * 0.12, -tangentSpeed / inverseTotal));
-    left.vx -= frictionImpulse * tangentX * inverseLeft;
-    left.vy -= frictionImpulse * tangentY * inverseLeft;
-    right.vx += frictionImpulse * tangentX * inverseRight;
-    right.vy += frictionImpulse * tangentY * inverseRight;
-
-    if (playSound) this.audio.collision(Math.abs(normalSpeed));
   }
 
   private mergeBodies(
@@ -881,6 +821,7 @@ class AlchemistGame {
     );
     result.grace = 0.65;
     this.bodies.push(result);
+    this.physics.wakeNear(this.bodies, x, y, result.radius + 18);
 
     this.combo =
       this.simulationSeconds - this.lastMergeAt <= 1.2 ? this.combo + 1 : 1;
@@ -987,6 +928,7 @@ class AlchemistGame {
       compressed: false,
       glowing,
       glowSeconds: glowing ? GLOW_REWARD_SECONDS : 0,
+      sleeping: false,
     };
   }
 
@@ -1065,17 +1007,26 @@ class AlchemistGame {
       context.fillStyle = `rgba(190, 58, 63, ${0.05 + dangerRatio * 0.13})`;
       context.fillRect(0, 0, BOARD_WIDTH, DANGER_Y);
     }
-    context.setLineDash([9, 8]);
+    context.save();
     context.strokeStyle =
       dangerRatio > 0
-        ? `rgba(178, 40, 48, ${0.45 + dangerRatio * 0.45})`
-        : "rgba(97, 63, 42, 0.35)";
-    context.lineWidth = 1.5;
+        ? `rgba(178, 40, 48, ${0.5 + dangerRatio * 0.45})`
+        : "rgba(48, 78, 82, 0.32)";
+    context.lineWidth = 1.15;
+    context.setLineDash([3, 7]);
     context.beginPath();
-    context.moveTo(18, DANGER_Y);
-    context.lineTo(BOARD_WIDTH - 18, DANGER_Y);
+    context.moveTo(22, DANGER_Y);
+    context.lineTo(BOARD_WIDTH - 22, DANGER_Y);
     context.stroke();
     context.setLineDash([]);
+    context.lineWidth = 1.4;
+    context.beginPath();
+    context.moveTo(18, DANGER_Y - 5);
+    context.lineTo(18, DANGER_Y + 5);
+    context.moveTo(BOARD_WIDTH - 18, DANGER_Y - 5);
+    context.lineTo(BOARD_WIDTH - 18, DANGER_Y + 5);
+    context.stroke();
+    context.restore();
 
     this.drawNextPreview();
 
@@ -1083,7 +1034,7 @@ class AlchemistGame {
       const radius = radiusFor(this.currentRank);
       this.aimX = Math.max(radius + 3, Math.min(BOARD_WIDTH - radius - 3, this.aimX));
       context.setLineDash([5, 8]);
-      context.strokeStyle = "rgba(42, 70, 111, 0.35)";
+      context.strokeStyle = "rgba(36, 78, 82, 0.32)";
       context.lineWidth = 1;
       context.beginPath();
       context.moveTo(this.aimX, 56);
@@ -1126,13 +1077,13 @@ class AlchemistGame {
 
     for (const body of this.bodies) {
       context.save();
-      context.fillStyle = "rgba(73, 42, 26, 0.16)";
+      context.fillStyle = "rgba(32, 46, 52, 0.14)";
       context.beginPath();
       context.ellipse(
-        body.x + 2,
-        body.y + body.radius * 0.72,
-        body.radius * 0.72,
-        body.radius * 0.25,
+        body.x + 1,
+        body.y + body.radius * 0.78,
+        body.radius * 0.68,
+        body.radius * 0.2,
         0,
         0,
         Math.PI * 2,
@@ -1189,24 +1140,37 @@ class AlchemistGame {
   private drawBackdrop(): void {
     const context = this.context;
     const background = context.createLinearGradient(0, 0, 0, BOARD_HEIGHT);
-    background.addColorStop(0, "#faeeda");
-    background.addColorStop(0.42, "#f0d6b4");
-    background.addColorStop(1, "#d4a97e");
+    background.addColorStop(0, "#e7eef0");
+    background.addColorStop(0.18, "#e4ebe4");
+    background.addColorStop(0.55, "#ead8b6");
+    background.addColorStop(1, "#c99668");
     context.fillStyle = background;
     context.fillRect(0, 0, BOARD_WIDTH, BOARD_HEIGHT);
 
-    // Faint transmutation circle instead of ruled grid lines.
-    const centerX = BOARD_WIDTH / 2;
-    const centerY = BOARD_HEIGHT * 0.62;
-    const ringRadius = 122;
     context.save();
-    context.strokeStyle = "rgba(97, 48, 31, 0.07)";
-    context.lineWidth = 1.5;
+    context.strokeStyle = "rgba(255, 255, 255, 0.16)";
+    context.lineWidth = 1;
+    for (let band = 1; band <= 5; band += 1) {
+      const y = 28 + band * 78;
+      context.globalAlpha = 0.35 - band * 0.04;
+      context.beginPath();
+      context.moveTo(10, y);
+      context.bezierCurveTo(90, y - 4, 230, y + 5, BOARD_WIDTH - 10, y);
+      context.stroke();
+    }
+    context.restore();
+
+    const centerX = BOARD_WIDTH / 2;
+    const centerY = BOARD_HEIGHT * 0.64;
+    const ringRadius = 118;
+    context.save();
+    context.strokeStyle = "rgba(72, 92, 88, 0.1)";
+    context.lineWidth = 1.25;
     context.beginPath();
     context.arc(centerX, centerY, ringRadius, 0, Math.PI * 2);
     context.stroke();
     context.beginPath();
-    context.arc(centerX, centerY, ringRadius * 0.7, 0, Math.PI * 2);
+    context.arc(centerX, centerY, ringRadius * 0.68, 0, Math.PI * 2);
     context.stroke();
     context.beginPath();
     for (let corner = 0; corner < 3; corner += 1) {
@@ -1220,16 +1184,27 @@ class AlchemistGame {
     context.stroke();
     context.restore();
 
+    const sediment = context.createLinearGradient(
+      0,
+      BOARD_HEIGHT - 36,
+      0,
+      BOARD_HEIGHT,
+    );
+    sediment.addColorStop(0, "rgba(138, 78, 36, 0)");
+    sediment.addColorStop(1, "rgba(120, 62, 28, 0.16)");
+    context.fillStyle = sediment;
+    context.fillRect(0, BOARD_HEIGHT - 36, BOARD_WIDTH, 36);
+
     const vignette = context.createRadialGradient(
       centerX,
-      BOARD_HEIGHT * 0.55,
-      BOARD_WIDTH * 0.35,
+      BOARD_HEIGHT * 0.5,
+      BOARD_WIDTH * 0.28,
       centerX,
-      BOARD_HEIGHT * 0.55,
-      BOARD_HEIGHT * 0.72,
+      BOARD_HEIGHT * 0.52,
+      BOARD_HEIGHT * 0.74,
     );
-    vignette.addColorStop(0, "rgba(97, 48, 31, 0)");
-    vignette.addColorStop(1, "rgba(97, 48, 31, 0.08)");
+    vignette.addColorStop(0, "rgba(28, 48, 52, 0)");
+    vignette.addColorStop(1, "rgba(28, 48, 52, 0.1)");
     context.fillStyle = vignette;
     context.fillRect(0, 0, BOARD_WIDTH, BOARD_HEIGHT);
   }
@@ -1243,10 +1218,10 @@ class AlchemistGame {
     const badgeY = 10;
 
     context.save();
-    context.fillStyle = "rgba(255, 250, 236, 0.94)";
-    context.strokeStyle = "rgba(105, 78, 49, 0.28)";
+    context.fillStyle = "rgba(248, 252, 252, 0.9)";
+    context.strokeStyle = "rgba(70, 96, 92, 0.22)";
     context.lineWidth = 1;
-    context.shadowColor = "rgba(67, 47, 31, 0.12)";
+    context.shadowColor = "rgba(28, 48, 52, 0.12)";
     context.shadowBlur = 6;
     context.shadowOffsetY = 2;
     context.beginPath();
@@ -1255,7 +1230,7 @@ class AlchemistGame {
     context.stroke();
     context.shadowColor = "transparent";
 
-    context.fillStyle = "#8c5818";
+    context.fillStyle = "#3d5a56";
     context.font = '800 9px "Avenir Next", "Trebuchet MS", sans-serif';
     context.textAlign = "center";
     context.textBaseline = "alphabetic";
@@ -1296,81 +1271,94 @@ class AlchemistGame {
       const halo = context.createRadialGradient(
         x,
         y,
-        radius * 0.72,
+        radius * 0.7,
         x,
         y,
-        radius * (1.42 + pulse * 0.1),
+        radius * (1.48 + pulse * 0.08),
       );
-      halo.addColorStop(0, "rgba(255, 244, 164, 0.34)");
-      halo.addColorStop(0.58, "rgba(255, 207, 70, 0.2)");
+      halo.addColorStop(0, "rgba(255, 244, 164, 0.28)");
+      halo.addColorStop(0.55, "rgba(255, 207, 70, 0.16)");
       halo.addColorStop(1, "rgba(255, 190, 42, 0)");
       context.fillStyle = halo;
       context.beginPath();
-      context.arc(x, y, radius * 1.55, 0, Math.PI * 2);
+      context.arc(x, y, radius * 1.58, 0, Math.PI * 2);
       context.fill();
     }
 
-    context.shadowColor = "rgba(49, 31, 29, 0.3)";
-    context.shadowBlur = 8;
-    context.shadowOffsetY = 4;
-    const gradient = context.createRadialGradient(
-      x - radius * 0.34,
-      y - radius * 0.42,
-      radius * 0.08,
-      x,
-      y,
+    const body = context.createRadialGradient(
+      x - radius * 0.32,
+      y - radius * 0.4,
+      radius * 0.06,
+      x + radius * 0.08,
+      y + radius * 0.16,
       radius,
     );
-    gradient.addColorStop(0, "#ffe9bf");
-    gradient.addColorStop(0.12, element.lightColor);
-    gradient.addColorStop(0.56, element.color);
-    gradient.addColorStop(1, element.darkColor);
-    context.fillStyle = gradient;
+    body.addColorStop(0, "#fff7e6");
+    body.addColorStop(0.1, element.lightColor);
+    body.addColorStop(0.52, element.color);
+    body.addColorStop(0.86, element.darkColor);
+    body.addColorStop(1, "#120c10");
+    context.fillStyle = body;
     context.beginPath();
     context.arc(x, y, radius, 0, Math.PI * 2);
     context.fill();
 
-    context.shadowColor = "transparent";
-    context.lineWidth = Math.max(1.1, radius * 0.04);
-    context.strokeStyle = "rgba(255, 255, 255, 0.3)";
+    context.lineWidth = Math.max(1, radius * 0.045);
+    context.strokeStyle = "rgba(255, 255, 255, 0.22)";
     context.beginPath();
-    context.arc(x, y, radius - context.lineWidth * 0.55, Math.PI * 0.98, Math.PI * 1.75);
+    context.arc(x, y, radius - context.lineWidth * 0.6, Math.PI * 1.02, Math.PI * 1.72);
     context.stroke();
-    context.strokeStyle = "rgba(38, 31, 55, 0.22)";
+    context.strokeStyle = "rgba(10, 12, 18, 0.28)";
     context.beginPath();
-    context.arc(x, y, radius - 0.8, Math.PI * 1.75, Math.PI * 2.98);
+    context.arc(x, y, radius - 0.7, Math.PI * 1.78, Math.PI * 2.92);
     context.stroke();
 
-    // Glassy specular highlight.
-    context.fillStyle = "rgba(255, 255, 255, 0.38)";
+    if (radius > 16) {
+      context.save();
+      const spin = this.reducedMotion ? 0 : this.simulationSeconds * 0.32;
+      context.strokeStyle = "rgba(255, 255, 255, 0.16)";
+      context.lineWidth = Math.max(0.7, radius * 0.028);
+      context.beginPath();
+      context.ellipse(
+        x,
+        y,
+        radius * 0.74,
+        radius * 0.46,
+        spin,
+        0,
+        Math.PI * 2,
+      );
+      context.stroke();
+      context.restore();
+    }
+
+    context.fillStyle = "rgba(255, 255, 255, 0.42)";
     context.beginPath();
     context.ellipse(
-      x - radius * 0.36,
-      y - radius * 0.44,
-      radius * 0.28,
-      radius * 0.16,
-      -Math.PI / 5,
+      x - radius * 0.34,
+      y - radius * 0.42,
+      radius * 0.26,
+      radius * 0.13,
+      -Math.PI / 5.2,
       0,
       Math.PI * 2,
     );
     context.fill();
 
-    // Metals (Fe, Ag, Au) read as polished: a brushed sheen band.
     if (rank >= 9) {
       context.lineCap = "round";
-      context.strokeStyle = "rgba(255, 255, 255, 0.22)";
-      context.lineWidth = radius * 0.14;
+      context.strokeStyle = "rgba(255, 255, 255, 0.26)";
+      context.lineWidth = radius * 0.12;
       context.beginPath();
-      context.arc(x, y, radius * 0.64, Math.PI * 1.05, Math.PI * 1.55);
+      context.arc(x, y, radius * 0.6, Math.PI * 1.08, Math.PI * 1.5);
       context.stroke();
       context.strokeStyle = "rgba(255, 255, 255, 0.1)";
       context.beginPath();
-      context.arc(x, y, radius * 0.64, Math.PI * 1.68, Math.PI * 1.88);
+      context.arc(x, y, radius * 0.6, Math.PI * 1.68, Math.PI * 1.9);
       context.stroke();
       context.lineCap = "butt";
     }
 
-    // The gold endgame atom twinkles.
     if (rank === MAX_ELEMENT_RANK) {
       const twinkle = this.reducedMotion
         ? 0.7
@@ -1419,13 +1407,13 @@ class AlchemistGame {
 
     context.textAlign = "center";
     context.textBaseline = "middle";
-    context.font = `800 ${Math.max(10, radius * 0.62)}px "Avenir Next", "Trebuchet MS", sans-serif`;
+    context.font = `800 ${Math.max(10, radius * 0.58)}px "Avenir Next", "Trebuchet MS", sans-serif`;
     context.lineJoin = "round";
-    context.lineWidth = Math.max(2, radius * 0.09);
-    context.strokeStyle = "rgba(31, 26, 46, 0.4)";
-    context.strokeText(element.symbol, x, y + 1);
+    context.lineWidth = Math.max(2.2, radius * 0.1);
+    context.strokeStyle = "rgba(12, 10, 16, 0.55)";
+    context.strokeText(element.symbol, x, y + 0.5);
     context.fillStyle = "#fffdf8";
-    context.fillText(element.symbol, x, y + 1);
+    context.fillText(element.symbol, x, y + 0.5);
 
     context.restore();
   }
@@ -1467,7 +1455,7 @@ class AlchemistGame {
       context.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
       context.fill();
     }
-    context.fillStyle = "#243e6a";
+    context.fillStyle = "#1f3d42";
     context.font = '800 13px "Avenir Next", sans-serif';
     context.textAlign = "center";
     context.fillText(effect.label, effect.x, effect.y - 30 - progress * 22);
@@ -1503,6 +1491,7 @@ class AlchemistGame {
 
     const highest = getElement(this.highestRank);
     this.ui.highestSymbol.textContent = highest.symbol;
+    this.ui.highestSymbol.style.color = highest.color;
     this.ui.pauseButton.disabled = this.phase !== "playing";
 
     const muteLabel = queryRequired<HTMLElement>(

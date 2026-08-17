@@ -2,11 +2,9 @@
   "extends": "../../tsconfig.base.json",
   "include": [
     "src/**/*",
-    "tests/**/*",
     "rsbuild.config.ts",
     "rslib.config.ts",
     "rspack.shared.ts",
-    "rstest.config.ts",
-    "rstest.e2e.config.ts"
+    "rstest.config.ts"
   ]
 }

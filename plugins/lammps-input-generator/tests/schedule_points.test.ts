@@ -83,4 +83,18 @@ describe("lerpSchedule", () => {
     const to = [{ x: 1, y: 2 }];
     expect(lerpSchedule([{ x: 0, y: 0 }], to, 1)).toEqual([{ x: 1, y: 2 }]);
   });
+
+  it("pads the shorter series by holding its last sample", () => {
+    // The length-mismatch path is the only reason lerpSchedule is more than
+    // a zip; asserting t=1 alone exercises the early return and nothing else.
+    const from = [
+      { x: 0, y: 0 },
+      { x: 1, y: 10 },
+    ];
+    const to = [{ x: 0, y: 100 }];
+    expect(lerpSchedule(from, to, 0.5)).toEqual([
+      { x: 0, y: 50 },
+      { x: 0.5, y: 55 },
+    ]);
+  });
 });

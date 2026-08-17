@@ -58,10 +58,6 @@ export interface InitConfig {
   thermoEvery: number;
   thermoStyle: string;
   neighbor?: NeighborConfig;
-  /** @deprecated v2 RPC compatibility. */
-  neighborSkin?: number;
-  /** @deprecated v2 RPC compatibility. */
-  neighborCheck?: boolean;
   forceField: ForceFieldPlaceholders;
 }
 

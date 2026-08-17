@@ -30,140 +30,78 @@ mol_project:
 ## What this repo is
 
 Official MolVis **page plugin collection**: npm workspaces under `plugins/*`
-(LAMMPS Template, Alchemist, Pyodide·molpy, Carbon Tube Builder) plus a root
-**meta** package that activates every child under one host plugin id. Built
-with Rsbuild/Rslib, React 19 peers, and a vendored host contract so jsDelivr
-can serve committed `dist/` from GitHub tags.
+(LAMMPS Input Generator, Alchemist, Pyodide·molpy, Carbon Tube Builder) plus a
+root **meta** package that activates every child under one host plugin id. The
+host SDK `@molcrafts/molvis-plugin` is the published 0.2.0 package (same
+for core/stage). Packages ship as GitHub Release assets served over jsDelivr.
 
 ## Where things live
 
-- Meta package: repo root (`src/`, `molvis.plugin.json`, `dist/plugin.js`)
-- Child plugins: `plugins/<name>/` (each has `src/`, `molvis.plugin.json`, `dist/`)
-- Shared build helpers: `rsbuild.plugin-shared.ts`, `plugin-externals.ts`, `tsconfig.base.json`
-- Host contract (vendored, hashed): `src/types/contract*.ts` and the same tree
-  under each plugin; gate = `npm run check:contract`
-- Tests: `plugins/*/tests/` and colocated `*.test.ts` under `src/` where present
-- Scripts: `scripts/` (dev serve, manifest sync, contract check)
-- Passive project knowledge: `.claude/notes/`
-- Active runtime specs: `.claude/specs/`
+| What | Where |
+|------|-------|
+| Meta package | repo root — `src/`, `molvis.plugin.json` |
+| Child plugins | `plugins/<name>/` |
+| Shared build recipe | `rsbuild.plugin-shared.ts`, `tsconfig.base.json` |
+| Host SDK | `@molcrafts/molvis-plugin` (npm 0.2.0) |
+| Tests | `plugins/*/tests/`, colocated `*.test.ts` |
+| Public overview | `ARCHITECTURE.md` |
+| Blueprint (modules, surface, layers) | `.claude/notes/architecture.md` |
+| Design rules, full text | `.claude/notes/design-preferences.md` |
+| Notes, release, open questions | `.claude/notes/` |
+| Live specs | `.claude/specs/` |
 
 ## Design preferences (default)
 
-**Default for all MolCrafts projects.** Apply unless the operator
-**explicitly** requires a functional (or other) style for a named
-subsystem — then capture the exception with `/mol:note` and scope it.
-Do **not** invent a functional style on your own.
+Full text: `.claude/notes/design-preferences.md`. Applies unless the operator
+names an exception via `/mol:note`.
 
-### Iron law — no silent debt (all projects)
-
-Discover anti-pattern / failing test / broken invariant / clear bug
-in the surface you touch or depend on → **prioritize or hard-stop**:
-
-1. **Do not ignore** ("pre-existing, leave it"), skip-mark, weaken
-   asserts, or land features on known rot.
-2. **Fix now** if local + stage-allowed; else **stop**, report
-   path:line, route `/mol:debug` / `/mol:refactor` / supersede.
-3. **Name it** in the summary (found / fixed / blocking). Silence = process failure.
-
-Outranks "stay in scope" / "minimal diff" when those mean knowingly
-leaving rot you already saw.
-
-### Iron law — high cohesion, low coupling (all modules)
-
-**Every module** (file / type / package) is a self-contained unit.
-This is a **product** iron law for all MolCrafts code — not optional
-style. It applies to every file, not only "important" ones.
-
-- **High cohesion** — one clear responsibility; everything in the
-  module serves that responsibility. Split when a unit accumulates
-  more than one coherent job.
-- **Low coupling** — depend only on narrow, explicit interfaces
-  (constructor args, method params, small protocols/traits). No
-  reach-through into other modules' internals; no ambient god
-  context; no hidden global registries required to exercise the unit.
-
-**Unit-test consequence (hard):** proving a module works uses **only
-that module's unit tests**, with fakes/stubs for outbound deps. Full
-suite and e2e are CI / host nets — not how you green a unit during
-design or implementation.
-
-### Prefer
-
-- **OOP by default.** Domain concepts are types with methods, not
-  free-floating helpers. Module-level functions only for true free
-  operations or thin package re-exports.
-- **Primitive, single-responsibility public APIs.** Callers compose:
-  construct → configure → one concern → read result.
-- **Inline until the second real use.** Extract only at a second call
-  site, or when a unit test must target that unit.
-- **Testable-in-isolation boundaries.** Dependencies enter through
-  explicit seams so the unit can be exercised with fakes.
-
-### Forbid
-
-- **Factory functions as the primary constructor story.** Prefer
-  `Foo(...)`. Explicit alternate constructors only when they have
-  distinct semantics (`Foo.from_file`, `Foo.empty`).
-- **God data structures.** No mega-dict / ambient "context" blob.
-- **All-in-one façade APIs.** Composition is the caller's job.
-- **Bundling host peers** (`react`, `react-dom`, `@molcrafts/molvis-core`,
-  `@molcrafts/molrs`, `@molcrafts/molplot`) — always externalize.
-- **Reimplementing host chrome** (dialog scrim, focus trap, panels)
-  when `api.dialogs` / `api.panels` / commands exist.
-- **Installing meta + the same child package** in one host session
-  (duplicate toolbar / panels).
-
-### Shape check (before adding a public symbol)
-
-1. Natural owning type? → method on that type, not a free function.
-2. More than one user-visible step? → split into primitives.
-3. Only one in-tree call site? → do not extract.
-4. Tempted to hang another field on a "context" bag? → new parameter
-   or smaller type instead.
-5. Can this unit's tests pass with fakes only? If no → redesign the seam.
-
-### Tests (default)
-
-- Unit tests under `plugins/*/tests/` (or colocated `*.test.ts`);
-  single-function where possible. E2E (Playwright) only for host-shell
-  flows that unit tests cannot cover (Alchemist `test:e2e`).
-- Do not dual-load Vega/molplot or a second React tree in tests or builds.
+- **Iron law — no silent debt.** Rot you touch gets fixed or hard-stops the work; never skip-marked, never left silent in the summary.
+- **Iron law — high cohesion, low coupling.** One job per module; deps through explicit seams. A unit is green via `npm test -w <workspace>` alone — if it needs the full suite, the host shell, or a sibling plugin, the design is wrong.
+- **OOP by default.** Types with methods, not free helpers.
+- **Primitive APIs.** Construct → configure → one concern → read result.
+- **Inline until the second use.** Extract at a second call site, not before.
+- **No factory functions** as the primary constructor story.
+- **No god context bags** — pass the fields a call needs.
+- **No all-in-one façades** — composition is the caller's job.
+- **Never bundle host peers** — react, react-dom, molvis-core, molrs, molplot.
+- **Never reimplement host chrome** when `api.dialogs` / `api.panels` exist.
+- **Tests mirror source**, single-function, one module → its own tests only.
 
 ## Default workflow
 
-For non-trivial work, prefer:
-1. plan (`/mol:spec` or free-form → discuss / grill)
-2. implement (`/mol:impl` or `/mol:debug`)
-3. review (`/mol:review`)
-4. capture decisions (`/mol:note` — harness sync, not append-only)
+plan (`/mol:spec`) → implement (`/mol:impl` / `/mol:debug`) → review
+(`/mol:review`) → capture (`/mol:note`).
 
 ## What must never change casually
 
-- Host plugin contract surface (`src/types/contract*.ts` + lock hash)
 - Plugin ids (`com.molcrafts.*`) and public RPC method names
 - Peer externalization of React / molvis-core / molrs / molplot
-- Committed `dist/` layout expected by jsDelivr install strings
+- The `dist/plugin.js` name and layout jsDelivr install strings resolve to
 - Manifest `entry` / `molvis` semver floor without a deliberate host bump
 
 <!-- mol:bootstrap:managed end -->
 
-<!-- Free-form additions below this line are preserved across re-runs.
-     If a section grows past a screen, promote to .claude/notes/<topic>.md. -->
+<!-- Free-form additions below this line are preserved across re-runs. -->
 
 ## Plugin-specific invariants
 
-- **Meta activate** registers every child unconditionally — do not hide a
-  child behind runtime `api.dialogs && api.panels` probes (silent missing UI).
-- **Vendored contract**: copy + lock file per package; never hand-edit the
-  hash. Refresh from the host source and re-run `check:contract`.
-- **Meta version** (`MAJOR.MINOR.PATCH`): major = plugin **system** change;
-  minor = **plugin count** (must match `plugins/*` and `OFFICIAL_PLUGINS`);
-  patch = fixes with the same set. Enforce with `npm run check:meta-version`.
-- **Child versions**: each `plugins/*` owns its own semver (independent).
-  `sync:manifests` / `check:manifests` are **per-package** only.
-- **Git tags**: prefer matching meta (`v0.4.0`) for jsDelivr pins.
-- **No lockfile**: `package-lock.json` is gitignored.
-- **dist/**: committed for jsDelivr; CI rebuilds and fails if stale. Required.
-- **Pyodide pack**: commit `plugins/pyodide-molpy/src/kernel/local_py_sources.ts`.
-  `pack-local-py` refreshes when siblings exist; CI keeps the committed file
-  when they do not.
+- **Meta activate** registers every child unconditionally — never hide one behind an `api.dialogs && api.panels` probe (silent missing UI).
+- **Host SDK from npm** — `@molcrafts/molvis-plugin` / `core` / `stage` at
+  `0.2.0`. A sibling `../molvis` checkout is optional (editable Python for
+  the kernel via `molvis-src`).
+- **Meta version** is plain semver. `minor` used to mean plugin count, which made removing a plugin a version *decrease*; that rule and its script are gone. `check:official-plugins` still asserts `OFFICIAL_PLUGINS` matches `plugins/*`.
+- **Child versions** are independent. `check:manifests` asserts each manifest matches its own `package.json`, and that the collection's `molvis` floor is not below any child's — it embeds their code.
+- **Git tags** match the meta version (`v0.5.0`) for jsDelivr pins.
+- **No lockfile** — `package-lock.json` is gitignored.
+- **`dist/` is not committed** — gitignored, built by CI, uploaded to the GitHub Release jsDelivr serves.
+- **No committed wheels.** molrs / molpy / mollog / molcfg are pinned PyPI packages in `MICROPIP_REQUIREMENTS`. Local molvis is an **editable tree**: symlink `molvis-src` → `../molvis/python/src/molvis`, kernel fetches `*.py` onto sys.path. Wheel pack is the Release fallback only. The old committed `wheels/` is still gone.
+- **Never dual-load** Vega/molplot or a second React tree, in tests or builds.
+- **No `scripts/` directory.** Guards are `package.json` one-liners wired into CI and pre-commit; build steps belong to the build config; release packaging belongs to the release workflow.
+- **No E2E.** Host-shell flows are proven with `fakePluginAPI` from
+  `@molcrafts/molvis-plugin/testing`, not a browser driver.
+- **Node rstest + molrs WASM.** Tests that import a plugin entry (or the
+  SDK barrel) must spread `molvisNodeRstest` so rspack, not Node, loads
+  `molrs_bg.wasm`.
+- **Build configs import `@molcrafts/molvis-plugin/externals`**, never
+  the SDK barrel — the barrel pulls stage/molrs and Node cannot load
+  `molrs_bg.wasm`.

@@ -53,15 +53,8 @@ function stageFromHostModules(): StageApi | null {
   const g = globalThis as typeof globalThis & {
     [HOST_KEY]?: Record<string, StageApi | undefined>;
   };
-  const host = g[HOST_KEY];
-  if (!host) return null;
-  for (const spec of ["@molvis/stage", "@molcrafts/molvis-stage"] as const) {
-    const mod = host[spec];
-    if (mod && typeof mod.RPCRouter === "function") {
-      return mod;
-    }
-  }
-  return null;
+  const mod = g[HOST_KEY]?.["@molcrafts/molvis-stage"];
+  return mod && typeof mod.RPCRouter === "function" ? mod : null;
 }
 
 async function importHostStage(): Promise<StageApi> {
@@ -73,21 +66,14 @@ async function importHostStage(): Promise<StageApi> {
   //    `import(` so the page plugin loader can rewrite it to a host blob URL
   //    (comments/newlines between `import(` and the string break the rewrite).
   try {
-    return (await import(/* webpackIgnore: true */ "@molvis/stage")) as StageApi;
-  } catch (first) {
-    try {
-      return (await import(
-        /* webpackIgnore: true */ "@molcrafts/molvis-stage"
-      )) as StageApi;
-    } catch (second) {
-      const a = first instanceof Error ? first.message : String(first);
-      const b = second instanceof Error ? second.message : String(second);
-      throw new Error(
-        "Cannot resolve host stage (RPCRouter). " +
-          "Expected globalThis.__MOLVIS_PLUGIN_HOST_MODULES__['@molvis/stage'] " +
-          `or a loadable bare import. host=${a}; fallback=${b}`,
-      );
-    }
+    return (await import(/* webpackIgnore: true */ "@molcrafts/molvis-stage")) as StageApi;
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      "Cannot resolve host stage (RPCRouter). Expected " +
+        "globalThis.__MOLVIS_PLUGIN_HOST_MODULES__['@molcrafts/molvis-stage'] " +
+        `or a loadable bare import. reason=${reason}`,
+    );
   }
 }
 

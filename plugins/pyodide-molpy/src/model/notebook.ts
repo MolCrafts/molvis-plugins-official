@@ -1,31 +1,7 @@
-import {
-  DEMO_CAFFEINE_BUILD,
-  DEMO_CAFFEINE_ORBIT,
-  DEMO_CAFFEINE_STYLES,
-} from "../demo/cells";
-import type { MimeBundle } from "../kernel/types";
-
-export interface NotebookCell {
-  id: string;
-  source: string;
-  /** Captured stdout/stderr streams for this execution. */
-  output: string;
-  /**
-   * Jupyter `execute_result` + `display_data` mimebundles from the last run.
-   * First entry is the last-expression result when present; following entries
-   * are mid-cell `display(...)` publications.
-   */
-  displays?: MimeBundle[];
-  execCount: number | null;
-  status: "idle" | "running" | "ok" | "error";
-  /** User-dragged editor height (px). Auto-size respects this as a floor. */
-  editorHeight?: number;
-}
-
-export interface NotebookState {
-  cells: NotebookCell[];
-  nextExec: number;
-}
+import { CAFFEINE_IPYNB, QUICKSTART_IPYNB } from "../notebooks/generated";
+import { createCell, emptyNotebook } from "./cells";
+import type { NotebookState } from "./cells";
+import { ipynbToNotebook, notebookToIpynbText } from "./ipynb";
 
 export const NOTEBOOK_STORAGE_KEY = "notebook.v1";
 
@@ -52,56 +28,16 @@ function notifyNotebookExternal(): void {
   }
 }
 
-export function createCell(source = ""): NotebookCell {
-  return {
-    id: `cell-${Math.random().toString(36).slice(2, 10)}`,
-    source,
-    displays: undefined,
-    output: "",
-    execCount: null,
-    status: "idle",
-  };
-}
-
-/** Empty shell — one blank cell. */
-export function emptyNotebook(): NotebookState {
-  return {
-    cells: [createCell()],
-    nextExec: 1,
-  };
-}
-
 /**
  * Three plain cells: caffeine draw_frame+commit → infinite orbit → style/theme.
  * Used by the "IPython: Demo" command (clear → fill).
  */
 export function demoNotebook(): NotebookState {
-  return {
-    cells: [
-      createCell(DEMO_CAFFEINE_BUILD),
-      createCell(DEMO_CAFFEINE_ORBIT),
-      createCell(DEMO_CAFFEINE_STYLES),
-    ],
-    nextExec: 1,
-  };
+  return ipynbToNotebook(CAFFEINE_IPYNB);
 }
 
 export function defaultNotebook(): NotebookState {
-  return {
-    cells: [
-      createCell(
-        [
-          "# Quick start — plain cell (no magic).",
-          "import molvis as mv",
-          "stage = mv.Stage()  # reuses kernel in-process stage",
-          "print('stage:', stage.name)",
-          "print('scripts:', mv.list_scripts())",
-          'mv.run("camera.py")  # named script from the Script library',
-        ].join("\n"),
-      ),
-    ],
-    nextExec: 1,
-  };
+  return ipynbToNotebook(QUICKSTART_IPYNB);
 }
 
 /**
@@ -137,22 +73,6 @@ export function loadNotebook(
     if (!Array.isArray(parsed.cells) || parsed.cells.length === 0) {
       return defaultNotebook();
     }
-    // Migrate the old, ambiguous statements-per-second demo option to the
-    // explicit seconds-per-step spelling while preserving its timing.
-    parsed.cells = parsed.cells.map((cell) => ({
-      ...cell,
-      source: cell.source.replace(
-        /^(\s*%%mv\.demo\s+)rate=([0-9]*\.?[0-9]+)(.*)$/m,
-        (_line, prefix: string, value: string, suffix: string) => {
-          const rate = Number(value);
-          return `${prefix}delay=${rate > 0 ? 1 / rate : 0}${suffix}`;
-        },
-      ),
-    }));
-    parsed.cells = parsed.cells.map((cell) => ({
-      ...cell,
-      source: cell.source.replace(/^(\s*%%mv\.demo\s+)step_delay=/m, "$1delay="),
-    }));
     return parsed;
   } catch {
     return defaultNotebook();
@@ -170,28 +90,10 @@ export function saveNotebook(
   }
 }
 
-/** Serialize the current notebook as a Jupyter nbformat 4 document. */
-export function notebookToIpynb(state: NotebookState): string {
-  const cells = state.cells.map((cell) => ({
-    cell_type: "code",
-    execution_count: cell.execCount,
-    metadata: {},
-    outputs: [],
-    source: cell.source.split(/(?<=\n)/),
-  }));
-  return JSON.stringify({
-    cells,
-    metadata: {
-      kernelspec: { display_name: "Python (Pyodide)", language: "python", name: "python3" },
-      language_info: { name: "python" },
-    },
-    nbformat: 4,
-    nbformat_minor: 5,
-  }, null, 2);
-}
-
 export function downloadNotebookIpynb(state: NotebookState, filename = "notebook.ipynb"): void {
-  const url = URL.createObjectURL(new Blob([notebookToIpynb(state)], { type: "application/x-ipynb+json" }));
+  const url = URL.createObjectURL(
+    new Blob([notebookToIpynbText(state)], { type: "application/x-ipynb+json" }),
+  );
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;

@@ -7,8 +7,8 @@ body.alchemist-standalone {
   min-height: 100vh;
   margin: 0;
   background:
-    radial-gradient(circle at 50% -10%, rgba(255, 255, 255, 0.96), transparent 34rem),
-    #f4ecdf;
+    radial-gradient(circle at 50% -8%, rgba(232, 242, 240, 0.95), transparent 32rem),
+    #dfe6e4;
 }
 
 body.alchemist-standalone > #root {
@@ -38,13 +38,13 @@ body.alchemist-standalone > #root {
 }
 
 .alchemist-app {
-  --ink: #1c3153;
-  --muted: #74787d;
-  --navy: #204b7e;
-  --navy-deep: #15355f;
-  --gold: #e1a538;
-  --gold-light: #ffdc75;
-  --line: rgba(105, 78, 49, 0.16);
+  --ink: #1a2d38;
+  --muted: #6a7574;
+  --navy: #1f4f5a;
+  --navy-deep: #12343c;
+  --gold: #d7a03a;
+  --gold-light: #f3d27a;
+  --line: rgba(62, 86, 82, 0.16);
   --red: #b43b46;
   width: 100%;
   min-height: 100vh;
@@ -52,8 +52,8 @@ body.alchemist-standalone > #root {
   padding: clamp(12px, 2vw, 24px);
   color: var(--ink);
   background:
-    radial-gradient(circle at 50% 2%, rgba(255, 255, 255, 0.78), transparent 24rem),
-    linear-gradient(155deg, #fbf7ef 0%, #f3ebdf 100%);
+    radial-gradient(circle at 50% 0%, rgba(236, 246, 244, 0.86), transparent 22rem),
+    linear-gradient(160deg, #f3f6f4 0%, #e4e8e3 100%);
   font-family:
     "Avenir Next", Avenir, "Trebuchet MS", "Segoe UI", sans-serif;
   font-size: 16px;
@@ -68,10 +68,12 @@ body.alchemist-standalone > #root {
   max-width: 100%;
   margin: 0 auto;
   overflow: hidden;
-  border: 1px solid hsl(0 0% 89.8%);
-  border-radius: 0.75rem;
-  background: hsl(0 0% 100%);
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+  border: 1px solid rgba(92, 74, 42, 0.22);
+  border-radius: 0.85rem;
+  background: #f4f2ea;
+  box-shadow:
+    0 0 0 1px rgba(215, 176, 104, 0.18),
+    0 14px 34px rgba(18, 28, 32, 0.18);
   transition: box-shadow 140ms ease;
   will-change: transform;
 }
@@ -193,15 +195,15 @@ body.alchemist-standalone > #root {
 
 .alchemist-brand h1 {
   margin: 0;
-  color: #f2bd49;
+  color: #e8b64a;
   font-size: clamp(2rem, 4vw, 2.8rem);
   font-weight: 900;
   line-height: 0.9;
   letter-spacing: -0.055em;
   -webkit-text-stroke: 2px var(--navy-deep);
   text-shadow:
-    0 2px 0 #fff1bd,
-    0 5px 0 #174171;
+    0 2px 0 #f6ecc0,
+    0 5px 0 #14343c;
 }
 
 .alchemist-pause-trigger,
@@ -285,7 +287,7 @@ body.alchemist-standalone > #root {
 }
 
 .alchemist-highest strong {
-  color: #ad6a18;
+  color: #c45a2c;
   font-size: 1.08rem;
   line-height: 1;
 }
@@ -298,10 +300,10 @@ body.alchemist-standalone > #root {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: rgba(255, 253, 248, 0.62);
+  background: rgba(248, 252, 251, 0.72);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 3px 10px rgba(67, 47, 31, 0.06);
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    0 3px 10px rgba(28, 48, 52, 0.06);
 }
 
 .alchemist-score-strip > div {
@@ -387,10 +389,10 @@ body.alchemist-standalone > #root {
   height: 58px;
   place-items: center;
   border-radius: 16px;
-  background: rgba(255, 253, 248, 0.5);
+  background: linear-gradient(180deg, rgba(255, 250, 236, 0.72), rgba(232, 220, 186, 0.5));
   box-shadow:
-    inset 0 0 0 1px rgba(105, 78, 49, 0.1),
-    0 2px 6px rgba(67, 47, 31, 0.07);
+    inset 0 0 0 1px rgba(140, 108, 48, 0.22),
+    0 2px 6px rgba(28, 48, 52, 0.08);
   transition:
     background 140ms ease,
     transform 140ms ease,
@@ -471,18 +473,20 @@ body.alchemist-standalone > #root {
   position: relative;
   width: 100%;
   overflow: hidden;
-  border: 6px solid #805936;
-  border-radius: 19px;
-  background: #d4a97e;
+  border: 3px solid #c49a52;
+  border-radius: 22px 22px 26px 26px;
+  background: #8d6238;
   transition: border-color 200ms ease;
   box-shadow:
-    inset 0 0 0 2px #c99768,
-    inset 0 0 20px rgba(75, 42, 21, 0.2),
-    0 12px 28px rgba(67, 47, 31, 0.13);
+    0 0 0 4px #6a4320,
+    0 0 0 5px #e0b56a,
+    inset 0 1px 0 rgba(255, 236, 196, 0.55),
+    inset 0 -16px 22px rgba(56, 28, 10, 0.18),
+    0 16px 32px rgba(24, 32, 34, 0.2);
 }
 
 .alchemist-app[data-danger-critical="true"] .alchemist-chamber {
-  border-color: #a23a42;
+  border-color: #c45a52;
   animation: alchemist-danger-pulse 0.65s ease-in-out infinite alternate;
 }
 
@@ -493,15 +497,17 @@ body.alchemist-standalone > #root {
 @keyframes alchemist-danger-pulse {
   from {
     box-shadow:
-      inset 0 0 0 2px #c99768,
-      inset 0 0 20px rgba(75, 42, 21, 0.2),
-      0 12px 28px rgba(67, 47, 31, 0.13);
+      0 0 0 4px #6a4320,
+      0 0 0 5px #e0b56a,
+      inset 0 1px 0 rgba(255, 236, 196, 0.55),
+      0 16px 32px rgba(24, 32, 34, 0.2);
   }
   to {
     box-shadow:
-      inset 0 0 0 2px #c99768,
-      inset 0 0 26px rgba(184, 47, 60, 0.26),
-      0 12px 30px rgba(178, 40, 48, 0.26);
+      0 0 0 4px #6a2824,
+      0 0 0 5px #e08a72,
+      inset 0 1px 0 rgba(255, 220, 196, 0.45),
+      0 16px 32px rgba(160, 40, 40, 0.22);
   }
 }
 
@@ -545,16 +551,15 @@ body.alchemist-standalone > #root {
   justify-items: center;
   padding: 22px;
   text-align: center;
-  background: linear-gradient(
-    rgba(250, 235, 207, 0.52),
-    rgba(46, 38, 38, 0.68)
-  );
-  backdrop-filter: blur(4px);
+  background:
+    radial-gradient(circle at 50% 36%, rgba(248, 252, 250, 0.16), transparent 46%),
+    rgba(14, 28, 32, 0.7);
+  backdrop-filter: blur(8px);
 }
 
 .alchemist-game-overlay > p:first-child {
   margin: 0 0 7px;
-  color: #8c5818;
+  color: #d8b15a;
   font-size: 0.64rem;
   font-weight: 900;
   letter-spacing: 0.16em;
@@ -596,7 +601,7 @@ body.alchemist-standalone > #root {
   background: var(--navy) !important;
   font-size: 0.8rem !important;
   font-weight: 900 !important;
-  box-shadow: 0 4px 0 #102a4f;
+  box-shadow: 0 4px 0 #0c262c;
   transition:
     background 140ms ease,
     transform 140ms ease,
@@ -604,14 +609,14 @@ body.alchemist-standalone > #root {
 }
 
 .alchemist-overlay-primary:hover {
-  background: #28588f !important;
+  background: #2a6672 !important;
   transform: translateY(-1px);
-  box-shadow: 0 5px 0 #102a4f;
+  box-shadow: 0 5px 0 #0c262c;
 }
 
 .alchemist-overlay-primary:active {
   transform: translateY(2px);
-  box-shadow: 0 2px 0 #102a4f;
+  box-shadow: 0 2px 0 #0c262c;
 }
 
 .alchemist-pause-menu {
@@ -780,8 +785,8 @@ body.alchemist-standalone > #root {
   }
 
   .alchemist-chamber {
-    border-width: 5px;
-    border-radius: 16px;
+    border-width: 3px;
+    border-radius: 18px 18px 22px 22px;
   }
 }
 

@@ -5,10 +5,9 @@ import {
   normalizeConfig,
 } from "../model/defaults";
 import type { LammpsEqConfig } from "../model/types";
-import type { PluginStorage } from "../types/plugin-api";
+import type { PluginStorage } from "@molcrafts/molvis-plugin";
 import {
   DEFAULT_SCRIPT_FILENAME,
-  LEGACY_STORAGE_KEY,
   STORAGE_KEY,
 } from "../version";
 import { ForceFieldSection } from "./sections/ForceFieldSection";
@@ -37,15 +36,7 @@ function loadDraft(storage: PluginStorage | null): LammpsEqConfig {
   if (!storage) return defaultConfig();
   try {
     const raw = storage.getItem(STORAGE_KEY);
-    if (!raw) {
-      // try previous key once
-      const legacy = storage.getItem(LEGACY_STORAGE_KEY);
-      if (legacy) {
-        const n = normalizeConfig(JSON.parse(legacy));
-        if (n) return n;
-      }
-      return defaultConfig();
-    }
+    if (!raw) return defaultConfig();
     return normalizeConfig(JSON.parse(raw)) ?? defaultConfig();
   } catch {
     return defaultConfig();

@@ -2,7 +2,7 @@ import type { InitConfig, NeighborStyle } from "../../model/types";
 import { SettingsRow, SettingsSection } from "../SettingsSection";
 import { Select, SelectItem } from "../Select";
 import { css } from "../styles";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@molcrafts/molvis-plugin/ui";
 
 const STYLES: NeighborStyle[] = ["bin", "nsq", "multi"];
 
