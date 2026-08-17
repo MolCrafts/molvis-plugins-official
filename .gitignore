@@ -43,6 +43,10 @@ __pycache__/
 dist/
 plugins/*/dist/
 release-assets/
+plugins/pyodide-molpy/runtime-wheels/
+molvis-src-manifest.json
+# Optional local symlink → ../molvis/python/src/molvis
+molvis-src
 
 # Generated from src/py/*.py by scripts/pack-py.mjs. The .py sources are
 # in-repo, so there is nothing for CI to miss and nothing to hand-sync.

@@ -15,8 +15,9 @@
     "check": "npm run typecheck && npm run test && npm run build"
   },
   "peerDependencies": {
-    "@molcrafts/molrs": ">=0.12.0",
-    "@molcrafts/molvis-core": ">=0.1.0",
+    "@molcrafts/molrs": ">=0.13.0",
+    "@molcrafts/molvis-core": ">=0.2.0",
+    "@molcrafts/molvis-plugin": ">=0.2.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

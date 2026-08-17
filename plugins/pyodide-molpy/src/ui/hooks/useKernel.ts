@@ -19,6 +19,11 @@ export function useKernel() {
     () => kernel.getLogs(),
     () => kernel.getLogs(),
   );
+  const lastError = useSyncExternalStore(
+    (cb) => kernel.subscribe(cb),
+    () => kernel.getLastError(),
+    () => kernel.getLastError(),
+  );
 
   const start = useCallback(() => kernel.start(), [kernel]);
   const reset = useCallback(() => kernel.reset(), [kernel]);
@@ -41,7 +46,7 @@ export function useKernel() {
   return {
     status: status as KernelStatus,
     logs: logs as KernelLogLine[],
-    lastError: kernel.getLastError(),
+    lastError,
     start,
     reset,
     interrupt,

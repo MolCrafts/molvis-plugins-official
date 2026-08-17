@@ -13,33 +13,17 @@ jobs:
       run:
         working-directory: plugins-official
     steps:
-      # The host packages are unpublished, and package.json declares them as
-      # `file:../molvis/*`. Checking molvis out as a *sibling* means plain
-      # `npm install` resolves them — no `npm link` dance, and the same layout
-      # a contributor has locally.
       - uses: actions/checkout@v4
         with:
           path: plugins-official
-      - uses: actions/checkout@v4
-        with:
-          repository: MolCrafts/molvis
-          path: molvis
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      # The kernel bootstrap is real Python now (src/py/**), linted and unit
-      # tested like any other source in this repo.
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install ruff pytest
         working-directory: .
-      - name: Build the host SDK
-        working-directory: molvis
-        run: |
-          npm install
-          npm run build:plugin
-          npm run build:stage
       - run: npm install
       - run: npm run check:manifests
       - run: npm run check:official-plugins

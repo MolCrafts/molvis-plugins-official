@@ -1,13 +1,13 @@
 {
   "name": "@molcrafts/molvis-plugin-pyodide-molpy",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "sideEffects": false,
   "description": "MolVis plugin: JupyterLite pyodide-kernel + molpy notebook",
   "license": "BSD-3-Clause",
   "scripts": {
-    "prebuild": "npm run pack:py && npm run pack:notebooks",
+    "prebuild": "npm run pack:py && npm run pack:notebooks && npm run pack:molvis-src && npm run pack:molvis-wheel",
     "pretypecheck": "npm run pack:py && npm run pack:notebooks",
     "pretest": "npm run pack:py && npm run pack:notebooks",
     "build": "tsc --noEmit && rsbuild build",
@@ -17,10 +17,14 @@
     "pack:py": "node -e \"const f=require('fs'),q=n=>JSON.stringify(f.readFileSync('src/py/'+n,'utf8'));f.writeFileSync('src/kernel/generated_py.ts','/* generated from src/py/*.py by pack:py */\\nexport const RPC_BRIDGE_PY='+q('rpc_bridge.py')+';\\nexport const MOLVIS_SETUP_PY='+q('molvis_setup.py')+';\\n')\"",
     "lint:py": "ruff check src/py tests/py",
     "test:py": "python3 -m pytest tests/py -q",
-    "pack:notebooks": "node -e \"const f=require('fs'),d='src/notebooks/',n=f.readdirSync(d).filter(x=>x.endsWith('.ipynb')).sort();f.writeFileSync(d+'generated.ts','/* generated from '+n.join(', ')+' by pack:notebooks */\\n'+n.map(x=>'export const '+x.replace('.ipynb','').toUpperCase()+'_IPYNB = '+f.readFileSync(d+x,'utf8').trim()+' as const;').join('\\n')+'\\n')\""
+    "pack:notebooks": "node -e \"const f=require('fs'),d='src/notebooks/',n=f.readdirSync(d).filter(x=>x.endsWith('.ipynb')).sort();f.writeFileSync(d+'generated.ts','/* generated from '+n.join(', ')+' by pack:notebooks */\\n'+n.map(x=>'export const '+x.replace('.ipynb','').toUpperCase()+'_IPYNB = '+f.readFileSync(d+x,'utf8').trim()+' as const;').join('\\n')+'\\n')\"",
+    "pack:molvis-src": "node pack-molvis-src.mjs",
+    "pack:molvis-wheel": "node pack-molvis-wheel.mjs"
   },
   "peerDependencies": {
-    "@molcrafts/molvis-core": ">=0.1.0",
+    "@molcrafts/molvis-core": ">=0.2.0",
+    "@molcrafts/molvis-plugin": ">=0.2.0",
+    "@molcrafts/molvis-stage": ">=0.2.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

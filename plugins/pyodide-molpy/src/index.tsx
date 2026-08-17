@@ -16,7 +16,7 @@ import { SCRIPTS_STORAGE_KEY, storedScriptCount } from "./model/scripts";
 import { createPythonMode } from "./modes/python-mode";
 import { createRpcClient } from "./rpc/client";
 import { registerEditorSettings } from "./settings/editor/register";
-import type { MolvisPluginModule, PluginAPI } from "@molcrafts/molvis-plugin";
+import { MolvisPlugin, type PluginAPI } from "@molcrafts/molvis-plugin";
 import { ConsolePanel } from "./ui/ConsolePanel";
 import { NotebookPanel } from "./ui/NotebookPanel";
 import { ScriptDialog } from "./ui/ScriptDialog";
@@ -169,10 +169,10 @@ export function registerPyodideMolpy(api: PluginAPI): void {
   });
 }
 
-const plugin: MolvisPluginModule = {
-  id: PLUGIN_ID,
-  name: PLUGIN_NAME,
-  version: PLUGIN_VERSION,
+class PyodideMolpyPlugin extends MolvisPlugin {
+  readonly id = PLUGIN_ID;
+  readonly name = PLUGIN_NAME;
+  readonly version = PLUGIN_VERSION;
 
   activate(api: PluginAPI) {
     api.log.info("pyodide-molpy activate (InProcessTransport → RPCRouter)");
@@ -183,12 +183,12 @@ const plugin: MolvisPluginModule = {
       api.log.warn("RPC client preflight:", err);
     }
     registerPyodideMolpy(api);
-  },
+  }
 
   deactivate(api: PluginAPI) {
     getKernel().setApp(null);
     api.log.info("pyodide-molpy deactivate");
-  },
-};
+  }
+}
 
-export default plugin;
+export default new PyodideMolpyPlugin();

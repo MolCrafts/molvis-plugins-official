@@ -8,7 +8,7 @@ import { registerOpenWizard } from "./commands/open-wizard/register";
 import { generateLammpsEqInput } from "./generate/generate";
 import { defaultConfig, normalizeConfig } from "./model/defaults";
 import type { LammpsEqConfig } from "./model/types";
-import type { MolvisPluginModule, PluginAPI } from "@molcrafts/molvis-plugin";
+import { MolvisPlugin, type PluginAPI } from "@molcrafts/molvis-plugin";
 import {
   COMMANDS,
   PLUGIN_ID,
@@ -40,19 +40,19 @@ export function registerLammpsEqInput(api: PluginAPI): void {
   });
 }
 
-const plugin: MolvisPluginModule = {
-  id: PLUGIN_ID,
-  name: PLUGIN_NAME,
-  version: PLUGIN_VERSION,
+class LammpsInputGenerator extends MolvisPlugin {
+  readonly id = PLUGIN_ID;
+  readonly name = PLUGIN_NAME;
+  readonly version = PLUGIN_VERSION;
 
   activate(api: PluginAPI) {
     api.log.info("lammps-input-generator activate");
     registerLammpsEqInput(api);
-  },
+  }
 
   deactivate(api: PluginAPI) {
     api.log.info("lammps-input-generator deactivate");
-  },
-};
+  }
+}
 
-export default plugin;
+export default new LammpsInputGenerator();

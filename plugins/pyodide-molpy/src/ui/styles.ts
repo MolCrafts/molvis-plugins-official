@@ -86,6 +86,60 @@ export const css = {
     display: "flex",
     flexDirection: "column" as const,
   },
+  /** Colab-style kernel strip pinned under the cells. */
+  statusBar: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    width: "100%",
+    minHeight: 24,
+    padding: "0 8px",
+    flexShrink: 0,
+    border: "none",
+    borderTop: `1px solid ${border}`,
+    background: "transparent",
+    fontSize: 11,
+    lineHeight: 1,
+    color: muted,
+    textAlign: "left" as const,
+    cursor: "pointer",
+    userSelect: "none" as const,
+  },
+  statusDot: (kind: "idle" | "loading" | "ready" | "busy" | "error") =>
+    ({
+      width: 8,
+      height: 8,
+      borderRadius: 999,
+      flexShrink: 0,
+      background:
+        kind === "ready"
+          ? tokens.completed
+          : kind === "busy"
+            ? accent
+            : kind === "error"
+              ? danger
+              : "transparent",
+      border:
+        kind === "idle" || kind === "loading"
+          ? `1.5px solid ${muted}`
+          : "none",
+      animation: kind === "loading" || kind === "busy" ? "molvis-nb-spin 0.9s linear infinite" : "none",
+      boxSizing: "border-box" as const,
+    }) as const,
+  statusBarTitle: {
+    fontWeight: 600,
+    color: fg,
+    flexShrink: 0,
+  },
+  statusBarHint: {
+    minWidth: 0,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap" as const,
+    fontFamily: FONT.mono,
+    fontSize: 10,
+    opacity: 0.85,
+  },
   editorError: {
     padding: "6px 10px",
     borderBottom: `1px solid ${border}`,

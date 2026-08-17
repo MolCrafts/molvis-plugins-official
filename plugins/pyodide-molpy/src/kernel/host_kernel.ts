@@ -13,6 +13,7 @@ import { PyodideKernel } from "@jupyterlite/pyodide-kernel/lib/kernel.js";
 import {
   MICROPIP_REQUIREMENTS,
   PYODIDE_INDEX_URL,
+  PYODIDE_PACKAGES,
   PYODIDE_VERSION,
 } from "../cdn";
 import type { RpcClient } from "../rpc/client";
@@ -22,9 +23,12 @@ import { BOOTSTRAP_STAGES } from "./bootstrap";
 import { isInterruptError } from "./errors";
 import { MemoryContentsManager } from "./memory_contents";
 import {
+  MOLVIS_SRC_DIR,
+  MOLVIS_SRC_MANIFEST,
   PIPLITE_INDEX,
   PIPLITE_WHEEL,
   pluginAssetUrl,
+  pluginRepoUrl,
   sameOriginWorkerUrl,
 } from "./runtime_assets";
 import type {
@@ -206,6 +210,13 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   });
 }
 
+type ActiveIo = {
+  stdout: string;
+  stderr: string;
+  displays: MimeBundle[];
+  data?: MimeBundle;
+};
+
 function asMimeBundle(data: unknown): MimeBundle | undefined {
   if (!data || typeof data !== "object") return undefined;
   const out: MimeBundle = {};
@@ -230,13 +241,12 @@ export class HostKernel {
   private contents: MemoryContentsManager | null = null;
   private bootstrapped = false;
 
-  /** Collect IOPub for the active execute. */
-  private active: {
-    stdout: string;
-    stderr: string;
-    displays: MimeBundle[];
-    data?: MimeBundle;
-  } | null = null;
+  /**
+   * IOPub sink for the execute currently feeding `sendMessage`.
+   * Each execute owns its own buffer so a later `finally { active = null }`
+   * cannot punch a hole in an overlapping run (syncScripts vs start/run).
+   */
+  private active: ActiveIo | null = null;
 
   setApp(app: unknown | null): void {
     this.rpc = app ? createRpcClient(app) : null;
@@ -380,8 +390,7 @@ export class HostKernel {
         mountDrive: false,
         loadPyodideOptions: {
           lockFileURL: PYODIDE_LOCK,
-          // Keep first paint light — numpy comes via micropip later if needed.
-          packages: ["micropip"],
+          packages: [...PYODIDE_PACKAGES],
         },
         contentsManager: this.contents,
       } as unknown as PyodideKernel.IOptions);
@@ -398,22 +407,11 @@ export class HostKernel {
       this.kernel = kernel;
       await withTimeout(kernel.ready, 180_000, "Pyodide worker initialize");
 
-      this.pushLog({
-        source: "system",
-        stream: "info",
-        text: `micropip install ${MICROPIP_REQUIREMENTS.join(", ")}…`,
-      });
-      await withTimeout(
-        this.executeSilent(
-          `
-import micropip
-await micropip.install(${JSON.stringify([...MICROPIP_REQUIREMENTS])}, keep_going=True)
-`,
-          "system",
-        ),
-        180_000,
-        "micropip install ecosystem",
+      await this.micropipInstall(
+        [...MICROPIP_REQUIREMENTS],
+        "PyPI pins",
       );
+      await this.installLocalMolvis();
 
       this.pushLog({
         source: "system",
@@ -451,6 +449,7 @@ await micropip.install(${JSON.stringify([...MICROPIP_REQUIREMENTS])}, keep_going
         stream: "stderr",
         text: `Kernel failed: ${message}`,
       });
+      console.error("[molvis-pyodide] kernel failed", err);
       this.kernel?.dispose();
       this.kernel = null;
       throw err;
@@ -468,15 +467,16 @@ await micropip.install(${JSON.stringify([...MICROPIP_REQUIREMENTS])}, keep_going
   }
 
   private onKernelMessage(msg: KernelMessage.IMessage): void {
-    if (msg.channel !== "iopub" || !this.active) return;
+    const io = this.active;
+    if (msg.channel !== "iopub" || !io) return;
     const type = msg.header.msg_type;
-    const content = msg.content as Record<string, unknown>;
+    const content = (msg.content ?? {}) as Record<string, unknown>;
 
     if (type === "stream") {
       const name = String(content.name ?? "stdout");
       const text = String(content.text ?? "");
-      if (name === "stderr") this.active.stderr += text;
-      else this.active.stdout += text;
+      if (name === "stderr") io.stderr += text;
+      else io.stdout += text;
       this.pushLog({
         source: "cell",
         stream: name === "stderr" ? "stderr" : "stdout",
@@ -486,12 +486,12 @@ await micropip.install(${JSON.stringify([...MICROPIP_REQUIREMENTS])}, keep_going
     }
     if (type === "execute_result") {
       const data = asMimeBundle(content.data);
-      if (data) this.active.data = data;
+      if (data) io.data = data;
       return;
     }
     if (type === "display_data") {
       const data = asMimeBundle(content.data);
-      if (data) this.active.displays.push(data);
+      if (data) io.displays.push(data);
       return;
     }
     if (type === "error") {
@@ -500,8 +500,130 @@ await micropip.install(${JSON.stringify([...MICROPIP_REQUIREMENTS])}, keep_going
       const tb = Array.isArray(content.traceback)
         ? (content.traceback as string[]).join("\n")
         : "";
-      this.active.stderr += tb || `${ename}: ${evalue}\n`;
+      io.stderr += tb || `${ename}: ${evalue}\n`;
     }
+  }
+
+  /**
+   * Overlay a sibling molvis checkout on sys.path when `/molvis-src/` is
+   * being served (Pyodide cannot `pip -e` a host path). Otherwise the
+   * kernel already has `molcrafts-molvis==0.2.0` from PyPI.
+   */
+  private async installLocalMolvis(): Promise<void> {
+    const manifestUrl = pluginRepoUrl(MOLVIS_SRC_MANIFEST);
+    const srcBase = pluginRepoUrl(MOLVIS_SRC_DIR);
+    let editable = false;
+    try {
+      const probe = await fetch(manifestUrl, { mode: "cors" });
+      editable = probe.ok;
+    } catch {
+      editable = false;
+    }
+
+    if (editable) {
+      this.pushLog({
+        source: "system",
+        stream: "info",
+        text: `editable molvis ← ${srcBase}`,
+      });
+      const reply = await withTimeout(
+        this.executeSilent(
+          `
+import importlib, json, pathlib, shutil, sys
+from pyodide.http import pyfetch
+
+manifest_url = ${JSON.stringify(manifestUrl)}
+src_base = ${JSON.stringify(srcBase.endsWith("/") ? srcBase : `${srcBase}/`)}
+root = pathlib.Path("/tmp/local-site")
+pkg = root / "molvis"
+if pkg.exists():
+    shutil.rmtree(pkg)
+pkg.mkdir(parents=True)
+
+resp = await pyfetch(manifest_url)
+if resp.status != 200:
+    raise RuntimeError(f"molvis-src manifest HTTP {resp.status}: {manifest_url}")
+files = await resp.json()
+if not isinstance(files, list) or "__init__.py" not in files:
+    raise RuntimeError("molvis-src manifest is empty or missing __init__.py")
+for rel in files:
+    dest = pkg / rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    r = await pyfetch(src_base + rel)
+    if r.status != 200:
+        raise RuntimeError(f"molvis-src {rel} HTTP {r.status}")
+    dest.write_bytes(await r.bytes())
+
+site = str(root)
+if site in sys.path:
+    sys.path.remove(site)
+sys.path.insert(0, site)
+for name in list(sys.modules):
+    if name == "molvis" or name.startswith("molvis."):
+        del sys.modules[name]
+importlib.invalidate_caches()
+`,
+          "system",
+        ),
+        180_000,
+        "editable molvis from sibling source",
+      );
+      if (reply.status === "error") {
+        throw new Error(
+          `editable molvis install failed: ` +
+            `${reply.ename ?? "Error"}: ${reply.evalue ?? ""}`.trim(),
+        );
+      }
+      return;
+    }
+
+    // No sibling tree: molcrafts-molvis==0.2.0 is already on sys.path
+    // from MICROPIP_REQUIREMENTS.
+  }
+
+  /**
+   * Install one micropip batch. Failures stop the kernel here — never
+   * `keep_going`. A missing pin used to 404 quietly and then explode as
+   * `No module named 'molvis'` in bootstrap, which is the wrong layer.
+   */
+  private async micropipInstall(
+    reqs: readonly string[],
+    label: string,
+    opts?: { deps?: boolean },
+  ): Promise<void> {
+    const deps = opts?.deps !== false;
+    this.pushLog({
+      source: "system",
+      stream: "info",
+      text: `micropip install ${label}: ${reqs.join(", ")}`,
+    });
+    const reply = await withTimeout(
+      this.executeSilent(
+        `
+import micropip
+await micropip.install(${JSON.stringify([...reqs])}, deps=${deps ? "True" : "False"})
+`,
+        "system",
+      ),
+      180_000,
+      `micropip install ${label}`,
+    );
+    if (reply.status === "error") {
+      throw new Error(
+        `micropip install failed (${label}): ` +
+          `${reply.ename ?? "Error"}: ${reply.evalue ?? ""}`.trim(),
+      );
+    }
+  }
+
+  private beginIo(): ActiveIo {
+    const io: ActiveIo = { stdout: "", stderr: "", displays: [] };
+    this.active = io;
+    return io;
+  }
+
+  private endIo(io: ActiveIo): void {
+    if (this.active === io) this.active = null;
   }
 
   private async executeSilent(
@@ -509,7 +631,7 @@ await micropip.install(${JSON.stringify([...MICROPIP_REQUIREMENTS])}, keep_going
     source: RunSource,
   ): Promise<KernelMessage.IExecuteReplyMsg["content"]> {
     if (!this.kernel) throw new Error("kernel not started");
-    this.active = { stdout: "", stderr: "", displays: [] };
+    const io = this.beginIo();
     try {
       const reply = await this.kernel.executeRequest({
         code,
@@ -519,15 +641,15 @@ await micropip.install(${JSON.stringify([...MICROPIP_REQUIREMENTS])}, keep_going
         allow_stdin: false,
         stop_on_error: true,
       });
-      if (this.active.stdout) {
-        this.pushLog({ source, stream: "stdout", text: this.active.stdout });
+      if (io.stdout) {
+        this.pushLog({ source, stream: "stdout", text: io.stdout });
       }
-      if (this.active.stderr) {
-        this.pushLog({ source, stream: "stderr", text: this.active.stderr });
+      if (io.stderr) {
+        this.pushLog({ source, stream: "stderr", text: io.stderr });
       }
       return reply;
     } finally {
-      this.active = null;
+      this.endIo(io);
     }
   }
 
@@ -555,7 +677,7 @@ await micropip.install(${JSON.stringify([...MICROPIP_REQUIREMENTS])}, keep_going
 
     this.runLock = true;
     this.setStatus("busy");
-    this.active = { stdout: "", stderr: "", displays: [] };
+    const io = this.beginIo();
 
     try {
       const reply = await this.kernel.executeRequest({
@@ -567,10 +689,10 @@ await micropip.install(${JSON.stringify([...MICROPIP_REQUIREMENTS])}, keep_going
         stop_on_error: true,
       });
 
-      const stdout = this.active.stdout;
-      const stderr = this.active.stderr;
-      const data = this.active.data;
-      const displays = this.active.displays;
+      const stdout = io.stdout;
+      const stderr = io.stderr;
+      const data = io.data;
+      const displays = io.displays;
 
       if (reply.status === "error") {
         const ename = reply.ename ?? "Error";
@@ -623,18 +745,18 @@ await micropip.install(${JSON.stringify([...MICROPIP_REQUIREMENTS])}, keep_going
         ? {
             ok: false,
             interrupted: true,
-            stdout: this.active?.stdout ?? "",
-            stderr: this.active?.stderr ?? "",
+            stdout: io.stdout,
+            stderr: io.stderr,
             error: "Execution stopped.",
           }
         : {
             ok: false,
-            stdout: this.active?.stdout ?? "",
-            stderr: (this.active?.stderr ?? "") + message,
+            stdout: io.stdout,
+            stderr: io.stderr + message,
             error: message,
           };
     } finally {
-      this.active = null;
+      this.endIo(io);
       this.runLock = false;
     }
   }

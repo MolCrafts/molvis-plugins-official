@@ -14,7 +14,7 @@ import type { PluginStorage } from "@molcrafts/molvis-plugin";
 import { useKernel } from "./hooks/useKernel";
 import { loadMonaco, type MonacoEditor } from "./monaco";
 import { css } from "./styles";
-import { monacoThemeId, watchHostTheme } from "./theme";
+import { monacoThemeId, tokens, watchHostTheme } from "./theme";
 
 /**
  * Script library editor — **only** place Monaco is used.
@@ -198,7 +198,7 @@ export function ScriptDialog({
               fontSize: 12,
               padding: "2px 6px",
               borderRadius: 4,
-              border: "1px solid var(--molvis-border, #cad5ce)",
+              border: `1px solid ${tokens.border}`,
               maxWidth: 160,
             }}
           >
@@ -219,7 +219,7 @@ export function ScriptDialog({
             fontSize: 12,
             padding: "2px 6px",
             borderRadius: 4,
-            border: "1px solid var(--molvis-border, #cad5ce)",
+            border: `1px solid ${tokens.border}`,
           }}
         />
         <button
@@ -282,7 +282,7 @@ export function ScriptDialog({
           padding: "4px 10px",
           fontSize: 11,
           opacity: 0.75,
-          borderBottom: "1px solid var(--molvis-border, #e2eae5)",
+          borderBottom: `1px solid ${tokens.border}`,
         }}
       >
         Call from notebook:{" "}

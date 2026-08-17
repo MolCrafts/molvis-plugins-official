@@ -17,7 +17,7 @@ import {
   isImageMime,
   preferredMime,
 } from "../kernel/display";
-import type { MimeBundle, RunResult } from "../kernel/types";
+import type { KernelStatus, MimeBundle, RunResult } from "../kernel/types";
 import {
   saveEditorSettings,
   useEditorSettings,
@@ -44,6 +44,7 @@ import {
   IconSpinner,
   IconTrash,
 } from "./icons";
+import { describeKernelStatus } from "./kernel_status";
 import { css } from "./styles";
 import { tokens } from "./theme";
 
@@ -105,7 +106,8 @@ export function NotebookPanel({
   app: unknown;
   storage: PluginStorage | null;
 }) {
-  const { status, run, start, reset, interrupt, syncScripts } = useKernel();
+  const { status, lastError, run, start, reset, interrupt, syncScripts } =
+    useKernel();
   const [nb, setNb] = useState<NotebookState>(() => loadNotebook(storage));
   const nbRef = useRef(nb);
   nbRef.current = nb;
@@ -276,16 +278,33 @@ export function NotebookPanel({
   const onKernelClick = () => {
     if (status === "loading") return;
     if (status === "idle") {
-      void start();
+      void start().catch((err) => {
+        console.error("[molvis-pyodide] kernel start failed", err);
+      });
       return;
     }
-    // ready / busy / error: tear down and boot again
-    void reset();
+    if (status === "busy") {
+      interrupt();
+      return;
+    }
+    // ready / error: tear down and boot again
+    void reset().catch((err) => {
+      console.error("[molvis-pyodide] kernel reset failed", err);
+    });
   };
 
   useEffect(() => {
     ensureSpinKeyframes();
   }, []);
+
+  // Colab connects on open. Only fire from idle so a failed kernel stays
+  // "Disconnected" until the user clicks the footer.
+  useEffect(() => {
+    if (status !== "idle") return;
+    void start().catch((err) => {
+      console.error("[molvis-pyodide] kernel start failed", err);
+    });
+  }, [start, status]);
 
   // Monaco is part of the Python-tab runtime, not an on-demand detail of a
   // double-click. Start loading as soon as the tab mounts and surface failure.
@@ -365,7 +384,13 @@ export function NotebookPanel({
             if (hasSelection) void runCell(nb.cells[selectedIndex].id);
           }}
         >
-          {running ? <IconSpinner /> : <IconPlay />}
+          {running ? (
+            <span style={{ color: tokens.running, display: "inline-flex" }}>
+              <IconSpinner />
+            </span>
+          ) : (
+            <IconPlay />
+          )}
         </IconButton>
         <IconButton
           label="Run selected cell and everything below"
@@ -453,6 +478,7 @@ export function NotebookPanel({
               onToggleWordWrap={toggleWordWrap}
               onChange={(source) => updateCell(cell.id, { source })}
               onRun={(source) => void runCell(cell.id, source)}
+              onStop={interrupt}
               onRunAndAdvance={(source) => {
                 void runCell(cell.id, source).then(() => {
                   setEditingId(null);
@@ -478,7 +504,39 @@ export function NotebookPanel({
           </div>
         ))}
       </div>
+
+      <KernelStatusBar
+        status={status}
+        lastError={lastError}
+        onClick={onKernelClick}
+      />
     </div>
+  );
+}
+
+function KernelStatusBar({
+  status,
+  lastError,
+  onClick,
+}: {
+  status: KernelStatus;
+  lastError: string | null;
+  onClick: () => void;
+}) {
+  const copy = describeKernelStatus(status, lastError);
+  const starting = status === "loading";
+  return (
+    <button
+      type="button"
+      style={css.statusBar}
+      disabled={starting}
+      title={copy.hint}
+      onClick={onClick}
+    >
+      <span style={css.statusDot(status)} aria-hidden />
+      <span style={css.statusBarTitle}>{copy.title}</span>
+      <span style={css.statusBarHint}>{copy.hint}</span>
+    </button>
   );
 }
 
@@ -526,6 +584,7 @@ function CellRow({
   onToggleWordWrap,
   onChange,
   onRun,
+  onStop,
   onRunAndAdvance,
   onRunAndInsert,
   onDelete,
@@ -541,6 +600,7 @@ function CellRow({
   onToggleWordWrap: () => void;
   onChange: (source: string) => void;
   onRun: (source: string) => void;
+  onStop: () => void;
   onRunAndAdvance: (source: string) => void;
   onRunAndInsert: (source: string) => void;
   onDelete: () => void;
@@ -578,13 +638,11 @@ function CellRow({
       <div style={css.gutter}>
         <span style={css.prompt}>[{cell.execCount ?? " "}]</span>
         {running ? (
-          <span
-            style={{ ...css.iconBtn({ accent: true }), cursor: "default" }}
-            title="Running…"
-            aria-label="Running"
-          >
-            <IconSpinner />
-          </span>
+          <IconButton label="Stop" onClick={onStop}>
+            <span style={{ color: tokens.running, display: "inline-flex" }}>
+              <IconSpinner />
+            </span>
+          </IconButton>
         ) : cell.status === "ok" ? (
           <IconButton
             label="Completed — run again"
@@ -596,13 +654,15 @@ function CellRow({
             </span>
           </IconButton>
         ) : cell.status === "error" ? (
-          <span
-            style={{ ...css.iconBtn({ danger: true }), cursor: "default" }}
-            title="Failed"
-            aria-label="Failed"
+          <IconButton
+            label="Failed — run again"
+            disabled={busy}
+            onClick={() => onRun(cell.source)}
           >
-            <IconX />
-          </span>
+            <span style={{ color: tokens.failed, display: "inline-flex" }}>
+              <IconX />
+            </span>
+          </IconButton>
         ) : (
           <IconButton
             label="Run (Mod+Enter)"

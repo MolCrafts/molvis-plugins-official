@@ -3,8 +3,8 @@
 [![ci](https://github.com/MolCrafts/molvis-plugins-official/actions/workflows/ci.yml/badge.svg)](https://github.com/MolCrafts/molvis-plugins-official/actions/workflows/ci.yml)
 
 Official **collection** of [MolVis](https://github.com/MolCrafts/molvis) page
-plugins. Scaffold: [molvis-plugin](https://github.com/MolCrafts/molvis-plugin-template)
-(`npx molvis-plugin create`).
+plugins. Scaffold: [molvis-plugin-template](https://github.com/MolCrafts/molvis-plugin-template)
+(`npx molvis-plugin create` once that CLI is on npm).
 
 Architecture: [ARCHITECTURE.md](./ARCHITECTURE.md).
 
@@ -12,12 +12,12 @@ Architecture: [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 | What | Source |
 |------|--------|
-| Collection (all plugins) | `MolCrafts/molvis-plugins-official@v0.4.0` |
+| Collection (all plugins) | `MolCrafts/molvis-plugins-official@v0.5.0` |
 | Latest release | `MolCrafts/molvis-plugins-official` |
 | Local | `http://127.0.0.1:4173/` after `npm run dev` |
 
 ```jsonc
-"molvis.plugins": ["MolCrafts/molvis-plugins-official@v0.4.0"]
+"molvis.plugins": ["MolCrafts/molvis-plugins-official@v0.5.0"]
 ```
 
 Do **not** install both the collection and the same child package.
@@ -36,18 +36,15 @@ kernel workers/wheels when present).
 
 ## Develop
 
-The host packages are unpublished, so `package.json` declares them as
-`file:../molvis/*`. Clone MolVis as a **sibling** directory and everything
-resolves with a plain install — no `npm link`:
+Host SDK is on npm (`@molcrafts/molvis-plugin@0.2.0` and the engines). A
+plain `npm install` is enough.
 
-```
-work/
-  molvis/                  # host checkout
-  molvis-plugins-official/ # this repo
-```
+A sibling `../molvis` checkout is **optional**. When present, `npm run dev`
+editable-installs its Python tree via `/molvis-src/` so kernel Python edits
+apply on reset. Without it the kernel installs `molcrafts-molvis==0.2.0`
+from PyPI.
 
 ```bash
-(cd ../molvis && npm install && npm run build:plugin && npm run build:stage)
 npm install
 npm run dev     # only entry for local work → http://127.0.0.1:4173/
 ```
@@ -69,6 +66,6 @@ tag; there is no local packaging step.
 ## Release
 
 ```bash
-git tag v0.4.1
-git push origin v0.4.1
+git tag v0.5.0
+git push origin v0.5.0
 ```

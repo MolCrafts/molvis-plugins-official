@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import type { RsbuildConfig } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
 import { rspack } from "@rspack/core";
-import { pluginExternals } from "@molcrafts/molvis-plugin";
+import { pluginExternals } from "@molcrafts/molvis-plugin/externals";
 
 export { pluginExternals };
 
@@ -60,6 +60,19 @@ export function jupyterLiteRuntimeCopyPatterns(): Array<{
     for (const name of fs.readdirSync(pypiDir)) {
       if (!name.endsWith(".whl") && name !== "all.json") continue;
       patterns.push({ from: join(pypiDir, name), to: name });
+    }
+  }
+
+  const molvisWheels = join(
+    collectionRoot,
+    "plugins/pyodide-molpy/runtime-wheels",
+  );
+  if (fs.existsSync(molvisWheels)) {
+    for (const name of fs.readdirSync(molvisWheels)) {
+      if (!name.startsWith("molcrafts_molvis") || !name.endsWith(".whl")) {
+        continue;
+      }
+      patterns.push({ from: join(molvisWheels, name), to: name });
     }
   }
 
@@ -120,11 +133,9 @@ export function createPluginRsbuildConfig(
   /**
    * UI libraries shared with `@molcrafts/molvis-plugin`.
    *
-   * The SDK is consumed through `npm link` until it is published, so its
-   * `dist/` resolves these from the *molvis* checkout while this repo's own
-   * imports resolve from here — Rsdoctor measured two copies of
-   * `lucide-react` (229 kB + 227 kB) in one bundle. Two copies of a radix
-   * package would be worse than bloat: portals and context stop matching.
+   * The SDK is `@molcrafts/molvis-plugin@0.2.0` from npm. Pin these
+   * here so the plugin bundle and the SDK share one copy — two radix
+   * trees break portals and context.
    *
    * The SDK declares them as peers; this pins every consumer to one copy.
    */

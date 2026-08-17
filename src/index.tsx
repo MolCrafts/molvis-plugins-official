@@ -10,7 +10,11 @@ import alchemistPlugin from "../plugins/alchemist/src/index";
 import carbonTubePlugin from "../plugins/carbon-tube-builder/src/index";
 import lammpsPlugin from "../plugins/lammps-input-generator/src/index";
 import pyodidePlugin from "../plugins/pyodide-molpy/src/index";
-import type { MolvisPluginModule, PluginAPI } from "@molcrafts/molvis-plugin";
+import {
+  MolvisPlugin,
+  type MolvisPluginModule,
+  type PluginAPI,
+} from "@molcrafts/molvis-plugin";
 import { PLUGIN_ID, PLUGIN_VERSION } from "./version";
 
 /**
@@ -29,10 +33,10 @@ const CHILDREN: readonly MolvisPluginModule[] = [
   pyodidePlugin,
 ];
 
-const plugin: MolvisPluginModule = {
-  id: PLUGIN_ID,
-  name: "MolVis Plugins Official",
-  version: PLUGIN_VERSION,
+class OfficialPlugins extends MolvisPlugin {
+  readonly id = PLUGIN_ID;
+  readonly name = "MolVis Plugins Official";
+  readonly version = PLUGIN_VERSION;
 
   activate(api: PluginAPI) {
     api.log.info("plugins-official meta activate");
@@ -41,14 +45,14 @@ const plugin: MolvisPluginModule = {
     // only hide a genuine host/plugin mismatch behind a silently missing
     // feature — which is how pyodide-molpy could disappear with one warn().
     for (const child of CHILDREN) child.activate(api);
-  },
+  }
 
   deactivate(api: PluginAPI) {
     for (const child of [...CHILDREN].reverse()) child.deactivate?.(api);
     api.log.info("plugins-official meta deactivate");
-  },
-};
+  }
+}
 
 export { CHILDREN };
 
-export default plugin;
+export default new OfficialPlugins();

@@ -1,6 +1,6 @@
 import { defineConfig } from "@rslib/core";
 import { pluginReact } from "@rsbuild/plugin-react";
-import { pluginExternals } from "@molcrafts/molvis-plugin";
+import { pluginExternals } from "@molcrafts/molvis-plugin/externals";
 import { applyAlchemistRspackDefaults } from "./rspack.shared";
 
 export default defineConfig({

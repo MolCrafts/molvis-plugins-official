@@ -32,8 +32,8 @@ mol_project:
 Official MolVis **page plugin collection**: npm workspaces under `plugins/*`
 (LAMMPS Input Generator, Alchemist, Pyodide·molpy, Carbon Tube Builder) plus a
 root **meta** package that activates every child under one host plugin id. The
-host SDK `@molcrafts/molvis-plugin` is declared `file:../molvis/plugin` until it is
-published; packages ship as GitHub Release assets served over jsDelivr.
+host SDK `@molcrafts/molvis-plugin` is the published 0.2.0 package (same
+for core/stage). Packages ship as GitHub Release assets served over jsDelivr.
 
 ## Where things live
 
@@ -42,7 +42,7 @@ published; packages ship as GitHub Release assets served over jsDelivr.
 | Meta package | repo root — `src/`, `molvis.plugin.json` |
 | Child plugins | `plugins/<name>/` |
 | Shared build recipe | `rsbuild.plugin-shared.ts`, `tsconfig.base.json` |
-| Host SDK | `@molcrafts/molvis-plugin` (linked) |
+| Host SDK | `@molcrafts/molvis-plugin` (npm 0.2.0) |
 | Tests | `plugins/*/tests/`, colocated `*.test.ts` |
 | Public overview | `ARCHITECTURE.md` |
 | Blueprint (modules, surface, layers) | `.claude/notes/architecture.md` |
@@ -86,14 +86,22 @@ plan (`/mol:spec`) → implement (`/mol:impl` / `/mol:debug`) → review
 ## Plugin-specific invariants
 
 - **Meta activate** registers every child unconditionally — never hide one behind an `api.dialogs && api.panels` probe (silent missing UI).
-- **Host SDK by sibling `file:` dep** — `../molvis` must be checked out beside this repo, with `npm run build:plugin` / `build:stage` run there. This replaced a `node_modules` symlink no manifest knew about, which `npm install` silently wiped.
+- **Host SDK from npm** — `@molcrafts/molvis-plugin` / `core` / `stage` at
+  `0.2.0`. A sibling `../molvis` checkout is optional (editable Python for
+  the kernel via `molvis-src`).
 - **Meta version** is plain semver. `minor` used to mean plugin count, which made removing a plugin a version *decrease*; that rule and its script are gone. `check:official-plugins` still asserts `OFFICIAL_PLUGINS` matches `plugins/*`.
 - **Child versions** are independent. `check:manifests` asserts each manifest matches its own `package.json`, and that the collection's `molvis` floor is not below any child's — it embeds their code.
-- **Git tags** match the meta version (`v0.4.0`) for jsDelivr pins.
+- **Git tags** match the meta version (`v0.5.0`) for jsDelivr pins.
 - **No lockfile** — `package-lock.json` is gitignored.
 - **`dist/` is not committed** — gitignored, built by CI, uploaded to the GitHub Release jsDelivr serves.
-- **No vendored wheels.** `molpy` / `molvis` are pinned PyPI packages in `MICROPIP_REQUIREMENTS` (`src/cdn.ts`) like every other runtime dep. The old committed `wheels/` was untracked (so a fresh clone could not build), its molpy wheel duplicated the PyPI release byte for byte, and CI had no sibling checkout to rebuild from — a stale wheel was undetectable.
+- **No committed wheels.** molrs / molpy / mollog / molcfg are pinned PyPI packages in `MICROPIP_REQUIREMENTS`. Local molvis is an **editable tree**: symlink `molvis-src` → `../molvis/python/src/molvis`, kernel fetches `*.py` onto sys.path. Wheel pack is the Release fallback only. The old committed `wheels/` is still gone.
 - **Never dual-load** Vega/molplot or a second React tree, in tests or builds.
 - **No `scripts/` directory.** Guards are `package.json` one-liners wired into CI and pre-commit; build steps belong to the build config; release packaging belongs to the release workflow.
 - **No E2E.** Host-shell flows are proven with `fakePluginAPI` from
   `@molcrafts/molvis-plugin/testing`, not a browser driver.
+- **Node rstest + molrs WASM.** Tests that import a plugin entry (or the
+  SDK barrel) must spread `molvisNodeRstest` so rspack, not Node, loads
+  `molrs_bg.wasm`.
+- **Build configs import `@molcrafts/molvis-plugin/externals`**, never
+  the SDK barrel — the barrel pulls stage/molrs and Node cannot load
+  `molrs_bg.wasm`.

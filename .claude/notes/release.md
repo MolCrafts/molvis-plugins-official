@@ -19,7 +19,7 @@ Child package versions stay **independent**.
 
 - **No `package-lock.json`** (gitignored).
 - **`dist/` is required** for jsDelivr; CI fails if stale; artifacts uploaded.
-- Prefer **git tag = meta version** (`v0.4.0`).
+- Prefer **git tag = meta version** (`v0.5.0`).
 
 ## Steps
 

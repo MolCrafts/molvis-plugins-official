@@ -14,9 +14,9 @@ of its own workspace list.
 
 ### Module list
 
-**Root meta — `@molcrafts/molvis-plugins-official` (v0.4.0, private)**
+**Root meta — `@molcrafts/molvis-plugins-official` (v0.5.0, private)**
 - `src/index.tsx` — meta plugin module; activates all four children in fixed order
-- `src/version.ts` — meta id/version + `OFFICIAL_PLUGINS` roster (minor == roster length)
+- `src/version.ts` — meta id/version + `OFFICIAL_PLUGINS` roster (plain semver)
 - `rsbuild.plugin-shared.ts` — one build recipe for every package (externals, dedupe, kernel asset copy)
 - `rsbuild.config.ts` — collection build (`injectStyles`, `kernelRuntime`)
 - `tsconfig.base.json` — strict ES2024 bundler config + `@molcrafts/molvis-core/molrs` path shim
@@ -27,7 +27,8 @@ of its own workspace list.
 
 **`plugins/alchemist` — `@molcrafts/molvis-plugin-alchemist` (v0.2.0)**
 - `src/index.tsx` — plugin module: host dialog + toolbar command, drag handling
-- `src/AlchemistGame.ts` — canvas game engine (`mountAlchemist`, ~1600 lines; largest module in repo)
+- `src/AlchemistGame.ts` — canvas game engine (`mountAlchemist`)
+- `src/physics.ts` — `ChamberPhysics` (sleeping stacks, one impulse pass per tick)
 - `src/model.ts` — pure game rules (spawn distribution, merge score, danger timer, tools)
 - `src/elements.ts` — element table + radius lookup; `src/audio.ts` — `AlchemistAudio`
 - `src/storage.ts` — `StorageAdapter` / `NamespacedLocalStorage` / progress load-save
@@ -48,7 +49,7 @@ of its own workspace list.
 - `src/ui/` — `WizardDialog.tsx`, `steps/`, `sections/`, `Select.tsx`, `TempScheduleChart.tsx` (molplot), `styles.ts`
 - `tests/` — 5 unit tests over generate / schedule / unit systems
 
-**`plugins/pyodide-molpy` — `…-pyodide-molpy` (v0.1.3)**
+**`plugins/pyodide-molpy` — `…-pyodide-molpy` (v0.2.0)**
 - `src/index.tsx` — mode + panels + dialog + commands + caches + 2 RPC methods
 - `src/kernel/` — `host_kernel.ts` (`HostKernel`, `MolvisPyodideKernel`, `getKernel()` singleton),
   `bootstrap.ts`, `display.ts`, `errors.ts`, `memory_contents.ts`, `runtime_assets.ts`,
@@ -59,7 +60,7 @@ of its own workspace list.
   `ShikiCodeView.tsx`, `console_sink.ts`, `theme.ts`, `hooks/useKernel.ts`
 - `src/py/` — `rpc_bridge.py` (worker↔host postMessage, imports no molvis), `molvis_setup.py`
 - `src/modes/python-mode.ts`, `src/cdn.ts`, `src/notebooks/*.ipynb`, `src/settings/{about,editor}/register.tsx`
-- `tests/` (TS) + `tests/py/` (pytest). No wheel-packing scripts: molpy/molvis are pinned PyPI packages in `src/cdn.ts`.
+- `tests/` (TS) + `tests/py/` (pytest). molpy/molvis are pinned PyPI packages in `src/cdn.ts` (`molcrafts-molvis==0.2.0`). Optional `pack-molvis-src.mjs` / `pack-molvis-wheel.mjs` overlay a sibling checkout or download the PyPI wheel as Release fallback.
 
 ### Public surface
 
@@ -112,8 +113,8 @@ of its own workspace list.
 - **root** — `src/index.tsx` Entry; `src/version.ts` Host contract; `rsbuild*.ts`,
   `tsconfig.base.json` Build.
 - **alchemist** — `index.tsx` Entry; `site.ts` Entry (second, standalone); `model.ts`,
-  `storage.ts`, `elements.ts` Model; `AlchemistGame.ts`, `audio.ts` UI/runtime (imperative canvas,
-  not React); `version.ts` Host contract.
+  `storage.ts`, `elements.ts`, `physics.ts` Model; `AlchemistGame.ts`, `audio.ts` UI/runtime
+  (imperative canvas, not React); `version.ts` Host contract.
 - **carbon-tube-builder** — `index.tsx` is Entry **and** UI **and** host-contract probe in one
   file; no Model layer (geometry lives in molrs).
 - **lammps-input-generator** — `index.tsx` Entry; `model/*`, `generate/generate.ts` Model
@@ -133,9 +134,10 @@ of its own workspace list.
   `pluginExternals` and a local `rspack.shared.ts`.
 - **`resolve.dedupe`** pins seven UI libs to one copy: `@radix-ui/react-checkbox`,
   `@radix-ui/react-select`, `@radix-ui/react-slot`, `class-variance-authority`, `clsx`,
-  `lucide-react`, `tailwind-merge`. The SDK is a sibling `file:` dep, so its `dist/` resolves
-  these from the *molvis* checkout while local imports resolve here — two Radix copies break
-  portals and context, not just size. Two further pins live in `resolve.alias` via `pinnedEntries`:
+  `lucide-react`, `tailwind-merge`. The SDK is `@molcrafts/molvis-plugin@0.2.0`
+  from npm (peers, not bundled); local imports of the same UI libs must
+  resolve to one copy or two Radix trees break portals and context, not just
+  size. Two further pins live in `resolve.alias` via `pinnedEntries`:
   `json5` forced to CJS (its ESM build lacks the named `parse` that `@jupyterlite/services`
   imports) and `tailwind-merge` forced to `dist/bundle-mjs.mjs` (dedupe bypasses its `exports`
   map). A package that cannot be located is **omitted**, never mapped to `false` — `alias: false`

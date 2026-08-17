@@ -4,9 +4,9 @@ Runs after ``rpc_bridge.py`` in the same interpreter, as a separate kernel
 execution so a failure here is attributed to this stage rather than to one
 130-line blob.
 
-``molpy`` / ``molvis`` are installed into the Pyodide site-packages by
-micropip from PyPI, pinned in ``src/cdn.ts`` — no ``sys.path`` hacks and no
-vendored wheels.
+``numpy`` comes from the Pyodide lock file. ``molpy`` / ``molrs`` come
+from micropip (molrs publishes an emscripten wheel). Local ``molvis`` is
+the sibling checkout on ``sys.path``.
 """
 
 import molvis as mv

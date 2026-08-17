@@ -51,6 +51,32 @@ export function pluginAssetUrl(name: string): string {
 }
 
 /**
+ * File on the plugin *repo* root when `serve .` puts `plugin.js` under
+ * `dist/`. Release assets are flat — this then equals {@link pluginAssetUrl}.
+ */
+export function pluginRepoUrl(rel: string, base = pluginBaseUrl()): string {
+  const clean = rel.replace(/^\.\//, "");
+  try {
+    const root = base.endsWith("/dist/") ? new URL("../", base) : new URL(base);
+    return new URL(clean, root).href;
+  } catch {
+    return `${base}${clean}`;
+  }
+}
+
+export function isLoopbackPluginHost(base = pluginBaseUrl()): boolean {
+  try {
+    const host = new URL(base, "http://localhost").hostname;
+    return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
+  } catch {
+    return false;
+  }
+}
+
+export const MOLVIS_SRC_MANIFEST = "molvis-src-manifest.json";
+export const MOLVIS_SRC_DIR = "molvis-src/";
+
+/**
  * `new Worker(cross-origin URL)` is blocked by the browser.
  * Same-origin: use the URL. Cross-origin: CORS fetch → blob: (module workers
  * from jupyterlite are self-contained bundles).

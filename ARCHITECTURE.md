@@ -58,11 +58,23 @@ release must follow the `molcrafts-molvis` PyPI release it pins.
 ## Public SDK
 
 ```ts
-import { MolvisPlugin, pluginExternals } from "@molcrafts/molvis/plugin";
-import { Button } from "@molcrafts/molvis/plugin/ui";
+import { MolvisPlugin } from "@molcrafts/molvis-plugin";
+import { pluginExternals } from "@molcrafts/molvis-plugin/externals";
+import { Button } from "@molcrafts/molvis-plugin/ui";
+
+export default class Plugin extends MolvisPlugin {
+  readonly id = "com.example.mine";
+  readonly name = "Mine";
+  readonly version = "0.1.0";
+  activate(api) { /* domain registers */ }
+}
 ```
 
-Scaffold: `npx molvis-plugin create`.
+Root `package.json` pins `@molcrafts/molvis-plugin` / `core` / `stage` at
+`0.2.0` from npm. A sibling molvis checkout is optional (kernel Python
+editable install only).
+
+Scaffold: [molvis-plugin-template](https://github.com/MolCrafts/molvis-plugin-template).
 
 `pluginExternals` is the whole externals list — never retype it, and never
 add a package to a local externals map instead. It includes
@@ -96,10 +108,10 @@ wrong, not a reason to add a browser driver.
 
 ## OOP
 
-- **Classes**: modifiers, modes, `HostKernel`, game engines
+- **Classes**: `MolvisPlugin` subclasses (default export), modifiers, modes, `HostKernel`, game engines
 - **Functions**: `register*(api)`, pure generators
 
 ## Versioning
 
-- Collection `MAJOR.MINOR.PATCH`: major = plugin system, minor = plugin count
+- Collection: plain semver (git tag `v<version>`). `minor` is not plugin count.
 - Children keep independent versions in their manifests

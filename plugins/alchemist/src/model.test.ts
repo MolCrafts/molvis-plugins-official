@@ -64,6 +64,19 @@ describe("element progression", () => {
     ).toBe(true);
   });
 
+  test("keeps C N O large enough that the mid-game stack is tight", () => {
+    const hydrogen = getElement(1);
+    const carbon = getElement(2);
+    const nitrogen = getElement(3);
+    const oxygen = getElement(4);
+    expect(carbon.symbol).toBe("C");
+    expect(nitrogen.symbol).toBe("N");
+    expect(oxygen.symbol).toBe("O");
+    expect(carbon.radius / hydrogen.radius).toBeGreaterThan(1.6);
+    expect(oxygen.radius * 2 / BOARD_WIDTH).toBeGreaterThan(0.2);
+    expect(oxygen.radius).toBeGreaterThan(carbon.radius + 10);
+  });
+
   test("scales the top ranks to classic merge-game proportions", () => {
     const chamberWidth = BOARD_WIDTH;
     const diameters = ELEMENTS.map((element) => element.radius * 2);

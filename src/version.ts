@@ -9,7 +9,7 @@ import pkg from "../package.json";
  * every range read as a downgrade. The rule and its script are gone.
  *
  * Child packages under `plugins/*` keep their **own** independent versions.
- * Git tags for jsDelivr usually match this meta version (e.g. `v0.4.0`).
+ * Git tags for jsDelivr usually match this meta version (e.g. `v0.5.0`).
  */
 export const PLUGIN_VERSION: string = pkg.version;
 
