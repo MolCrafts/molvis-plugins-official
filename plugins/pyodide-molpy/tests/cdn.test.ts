@@ -1,7 +1,6 @@
 import { describe, expect, it } from "@rstest/core";
 import {
   MICROPIP_REQUIREMENTS,
-  MOLVIS_WHEEL,
   PYODIDE_PACKAGES,
   PYODIDE_VERSION,
 } from "../src/cdn";
@@ -30,6 +29,5 @@ describe("runtime pins", () => {
     expect(names).not.toContain("numpy");
     expect(PYODIDE_PACKAGES).toContain("numpy");
     expect(PYODIDE_PACKAGES).toContain("micropip");
-    expect(MOLVIS_WHEEL).toMatch(/^molcrafts_molvis-.+-py3-none-any\.whl$/);
   });
 });

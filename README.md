@@ -1,6 +1,6 @@
 # molvis-plugins-official
 
-[![ci](https://github.com/MolCrafts/molvis-plugins-official/actions/workflows/ci.yml/badge.svg)](https://github.com/MolCrafts/molvis-plugins-official/actions/workflows/ci.yml)
+[![test](https://github.com/MolCrafts/molvis-plugins-official/actions/workflows/test.yml/badge.svg)](https://github.com/MolCrafts/molvis-plugins-official/actions/workflows/test.yml)
 
 Official **collection** of [MolVis](https://github.com/MolCrafts/molvis) page
 plugins. Scaffold: [molvis-plugin-template](https://github.com/MolCrafts/molvis-plugin-template)
@@ -63,7 +63,17 @@ npm run check   # manifests + typecheck + lint:py + tests + build + bundle
 Release assets are flattened by `.github/workflows/release.yml` on a `v*`
 tag; there is no local packaging step.
 
-## Release
+## CI and release
+
+| workflow | feature branch (fork or upstream) | dev / master, or a PR into one | upstream only |
+|---|---|---|---|
+| `lint.yml` | `lint / guards` (manifests, roster, ruff), `lint / typecheck` | same | — |
+| `test.yml` | `test / unit` (rstest + kernel pytest) | + `test / bundle` (build + `verify:bundle`) | — |
+| `release.yml` | — | — | `v*` tag: `release / assets` uploads to the GitHub Release; `workflow_dispatch` is a dry run anywhere (assets as a workflow artifact) |
+
+A pull request from a branch of the same repository skips the jobs its push
+already ran. `.pre-commit-config.yaml` runs `npm run check`, the union of all
+of the above.
 
 ```bash
 git tag v0.5.0

@@ -72,16 +72,4 @@ if (whl.length !== 1) {
   process.exit(1);
 }
 
-const cdn = path.join(here, "src/cdn.ts");
-const cdnText = fs.readFileSync(cdn, "utf8");
-const next = cdnText.replace(
-  /export const MOLVIS_WHEEL = "[^"]+";/,
-  `export const MOLVIS_WHEEL = ${JSON.stringify(whl[0])};`,
-);
-if (next === cdnText && !cdnText.includes(whl[0])) {
-  console.error("cdn.ts has no MOLVIS_WHEEL assignment to rewrite");
-  process.exit(1);
-}
-fs.writeFileSync(cdn, next);
-
 console.log("packed", whl[0], "from", molvis ?? "PyPI");
