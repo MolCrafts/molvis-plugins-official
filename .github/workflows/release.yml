@@ -8,8 +8,11 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -21,8 +24,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup-node
-      - uses: ./.github/actions/setup-python
+      - uses: MolCrafts/molcrafts-ci/actions/setup-node@master
+      - uses: MolCrafts/molcrafts-ci/actions/setup-python@master
       - run: uv tool install ruff && uv pip install --system pytest
       - run: npm run check
 
