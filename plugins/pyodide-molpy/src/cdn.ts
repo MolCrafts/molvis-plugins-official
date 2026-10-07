@@ -48,11 +48,3 @@ export const MICROPIP_REQUIREMENTS = [
   "molcrafts-molpy==0.13.1",
   "molcrafts-molvis==0.2.0",
 ] as const;
-
-/**
- * Optional sibling of plugin.js. The kernel prefers PyPI
- * (`molcrafts-molvis==0.2.0` above). A local `molvis-src/` tree overlays
- * that pin so Python edits apply on kernel reset. The wheel is a Release
- * fallback when PyPI is unreachable.
- */
-export const MOLVIS_WHEEL = "molcrafts_molvis-0.2.0-py3-none-any.whl";

@@ -95,7 +95,7 @@ npm test        # every plugin's tests + the python bridge tests
 ```
 
 There is no e2e. The Alchemist Playwright suite was removed: it gated both
-`ci.yml` and `release.yml` while being **red** — its fake `PluginAPI` omitted
+the old `ci.yml` and `release.yml` while being **red** — its fake `PluginAPI` omitted
 `dialogs`, which `src/index.tsx` calls during `activate`, so a tag push could
 not publish. Several of its assertions also targeted selectors present in zero
 source files, so they could not fail. What it meant to prove is covered by

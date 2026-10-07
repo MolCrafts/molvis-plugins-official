@@ -1,8 +1,8 @@
-# Local gates that must match CI (.github/workflows/ci.yml `check` job).
+# Local gates that must match CI (.github/workflows/lint.yml + test.yml).
 # Install: pip install pre-commit && pre-commit install
 # Run all: pre-commit run --all-files
 #
-# Same command as mol_project.build.check / CI: npm run check
+# Same command as mol_project.build.check / release.yml: npm run check
 # (manifests + official roster + typecheck + lint:py + test + build + verify).
 
 repos:
