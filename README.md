@@ -65,7 +65,10 @@ tag; there is no local packaging step.
 
 ## CI and release
 
-`test / tier` picks the tier: the fast tier on a feature-branch push to
+Each workflow's first job, `<file> / context`, runs
+`MolCrafts/molcrafts-ci/actions/ci-context@master`, which decides the tier,
+upstream-only gating and pull-request dedup; the other jobs read its outputs.
+The fast tier runs on a feature-branch push to
 MolCrafts; the full tier on every push to a fork (so a branch is proven before
 its pull request), on dev, master and main on MolCrafts, and on pull requests,
 tags and dispatches.
@@ -73,10 +76,10 @@ tags and dispatches.
 | workflow | fast tier | full tier | upstream only |
 |---|---|---|---|
 | `lint.yml` | `lint / guards` (manifests, roster, ruff), `lint / typecheck` | same | — |
-| `test.yml` | `test / tier`, `test / unit` (rstest + kernel pytest) | + `test / bundle` (build + `verify:bundle`) | — |
+| `test.yml` | `test / context`, `test / unit` (rstest + kernel pytest) | + `test / bundle` (build + `verify:bundle`) | — |
 | `release.yml` | — | — | `v*` tag: `release / assets` uploads to the GitHub Release; `workflow_dispatch` is a dry run anywhere (assets as a workflow artifact) |
 
-A pull request inside a fork skips: its push already ran the full tier. Setup
+A pull request inside a fork runs only the context jobs: its push already ran the full tier. Setup
 is `MolCrafts/molcrafts-ci/actions/setup-{node,python}@master`.
 `.pre-commit-config.yaml` runs `npm run check`, the union of all
 of the above.
