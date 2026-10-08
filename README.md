@@ -75,9 +75,9 @@ tags and dispatches.
 
 | workflow | fast tier | full tier | upstream only |
 |---|---|---|---|
-| `lint.yml` | `lint / guards` (manifests, roster, ruff), `lint / typecheck` | same | — |
+| `lint.yml` | `lint / guards` (manifests, roster, ruff), `lint / typecheck`, `lint / workflows` (MolCrafts/molcrafts-ci/actions/check-workflows) | same | — |
 | `test.yml` | `test / context`, `test / unit` (rstest + kernel pytest) | + `test / bundle` (build + `verify:bundle`) | — |
-| `release.yml` | — | — | `v*` tag: `release / assets` uploads to the GitHub Release; `workflow_dispatch` is a dry run anywhere (assets as a workflow artifact) |
+| `release.yml` | — | — | `release / build` stages the assets as a workflow artifact; a `v*` tag on MolCrafts (`publish`): `release / assets` uploads them to the GitHub Release; `workflow_dispatch` is a dry run anywhere |
 
 A pull request inside a fork runs only the context jobs: its push already ran the full tier. Setup
 is `MolCrafts/molcrafts-ci/actions/setup-{node,python}@master`.
