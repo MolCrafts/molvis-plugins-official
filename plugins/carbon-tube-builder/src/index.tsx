@@ -1,7 +1,4 @@
-import {
-  CarbonTubeBuilder,
-  type Frame,
-} from "@molcrafts/molvis-core/molrs";
+import { CarbonTubeBuilder } from "@molcrafts/molvis-core/molrs";
 import { useState } from "react";
 
 import {
@@ -11,21 +8,8 @@ import {
 } from "@molcrafts/molvis-plugin";
 import { Button, Checkbox } from "@molcrafts/molvis-plugin/ui";
 import "./styles.css";
+import { stageEditMolecule } from "./edit_stamp";
 import { PLUGIN_ID, PLUGIN_NAME, PLUGIN_VERSION } from "./version";
-
-interface EditStampMode {
-  name: string;
-  pendingMolecule: Frame | null;
-}
-
-function getEditMode(app: Molvis): EditStampMode | null {
-  const mode = app.mode as unknown;
-  if (!mode || typeof mode !== "object") return null;
-  const candidate = mode as Partial<EditStampMode>;
-  return candidate.name === "edit" && "pendingMolecule" in candidate
-    ? (candidate as EditStampMode)
-    : null;
-}
 
 function numberValue(event: React.ChangeEvent<HTMLInputElement>): number {
   return event.currentTarget.valueAsNumber;
@@ -55,13 +39,7 @@ const CarbonTubePanel: React.FC<{ app: Molvis | null }> = ({ app }) => {
       builder.setVacuum(vacuum);
       const frame = builder.build();
       builder.free();
-
-      const editMode = getEditMode(app);
-      if (!editMode) {
-        frame.free();
-        throw new Error("Switch to Edit mode first");
-      }
-      editMode.pendingMolecule = frame;
+      stageEditMolecule(app, frame);
       setFailed(false);
       setMessage("Tube ready — click the 3D canvas to place copies.");
     } catch (error) {

@@ -73,13 +73,15 @@ export function MonacoCellEditor({
         glyphMargin: false,
         folding: false,
         scrollBeyondLastLine: false,
-        automaticLayout: true,
+        // Height is set by the content-size listener below. automaticLayout
+        // installs a ResizeObserver per cell and reflows on every panel tick.
+        automaticLayout: false,
         wordWrap: wordWrap ? "on" : "off",
         renderWhitespace: "selection",
         tabSize: 4,
         insertSpaces: true,
         detectIndentation: false,
-        fontLigatures: true,
+        fontLigatures: false,
         fontFamily:
           '"JetBrains Mono", "SFMono-Regular", Consolas, monospace',
         fontSize: 13,

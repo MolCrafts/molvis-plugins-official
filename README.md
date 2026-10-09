@@ -1,5 +1,9 @@
 # molvis-plugins-official
 
+npm package: `@molcrafts/molvis-plugin-official`. The GitHub repo keeps the
+plural name because MolVis installs `owner/repo`, and that string is
+`MolCrafts/molvis-plugins-official`.
+
 [![test](https://github.com/MolCrafts/molvis-plugins-official/actions/workflows/test.yml/badge.svg)](https://github.com/MolCrafts/molvis-plugins-official/actions/workflows/test.yml)
 
 Official **collection** of [MolVis](https://github.com/MolCrafts/molvis) page
@@ -12,12 +16,12 @@ Architecture: [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 | What | Source |
 |------|--------|
-| Collection (all plugins) | `MolCrafts/molvis-plugins-official@v0.5.0` |
+| Collection (all plugins) | `MolCrafts/molvis-plugins-official@v0.6.0` |
 | Latest release | `MolCrafts/molvis-plugins-official` |
 | Local | `http://127.0.0.1:4173/` after `npm run dev` |
 
 ```jsonc
-"molvis.plugins": ["MolCrafts/molvis-plugins-official@v0.5.0"]
+"molvis.plugins": ["MolCrafts/molvis-plugins-official@v0.6.0"]
 ```
 
 Do **not** install both the collection and the same child package.
@@ -82,6 +86,6 @@ is `MolCrafts/molcrafts-ci/actions/setup-{node,python}@master`.
 of the above.
 
 ```bash
-git tag v0.5.0
-git push origin v0.5.0
+git tag v0.6.0
+git push origin v0.6.0
 ```

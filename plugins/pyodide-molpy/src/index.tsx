@@ -5,7 +5,7 @@
  * (same JSON-RPC catalog as WebSocket). No hard-coded camera/scene bridge.
  */
 
-import { getKernel } from "./kernel";
+import { loadKernel, loadedKernel, releaseKernelApp } from "./kernel";
 import { EDITOR_SETTINGS_KEY } from "./model/editor_settings";
 import {
   NOTEBOOK_STORAGE_KEY,
@@ -24,7 +24,9 @@ import { PLUGIN_ID, PLUGIN_NAME, PLUGIN_VERSION } from "./version";
 
 function bindApp(api: PluginAPI, app?: unknown): void {
   const target = app ?? api.app;
-  getKernel().setApp(target ?? null);
+  void loadKernel().then((kernel) => {
+    kernel.setApp(target ?? null);
+  });
 }
 
 /**
@@ -158,14 +160,15 @@ export function registerPyodideMolpy(api: PluginAPI): void {
   registerEditorSettings(api);
 
   api.rpc.registerMethod("kernelStatus", () => {
-    return { status: getKernel().getStatus() };
+    return { status: loadedKernel()?.getStatus() ?? "idle" };
   });
 
   api.rpc.registerMethod("runScript", async (params) => {
     const name = String(params.name ?? params.script ?? "");
     if (!name) return { ok: false, error: "name required" };
-    bindApp(api);
-    return getKernel().runNamedScript(name);
+    const kernel = await loadKernel();
+    kernel.setApp(api.app ?? null);
+    return kernel.runNamedScript(name);
   });
 }
 
@@ -186,7 +189,7 @@ class PyodideMolpyPlugin extends MolvisPlugin {
   }
 
   deactivate(api: PluginAPI) {
-    getKernel().setApp(null);
+    releaseKernelApp();
     api.log.info("pyodide-molpy deactivate");
   }
 }

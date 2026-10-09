@@ -45,3 +45,18 @@ export function createCell(source = ""): NotebookCell {
 export function emptyNotebook(): NotebookState {
   return { cells: [createCell()], nextExec: 1 };
 }
+
+/**
+ * Where a multi-cell run continues after `id`.
+ *
+ * Reads the live list, not the list from when the run started, so a cell
+ * inserted or removed while the previous cell was executing is not skipped
+ * or repeated. A missing id ends the run.
+ */
+export function indexAfterCell(
+  cells: readonly { id: string }[],
+  id: string,
+): number {
+  const index = cells.findIndex((cell) => cell.id === id);
+  return index < 0 ? cells.length : index + 1;
+}

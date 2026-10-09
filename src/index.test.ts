@@ -4,25 +4,14 @@ import { describe, expect, it } from "@rstest/core";
 import alchemistPlugin from "../plugins/alchemist/src/index";
 import carbonTubePlugin from "../plugins/carbon-tube-builder/src/index";
 import lammpsPlugin from "../plugins/lammps-input-generator/src/index";
+import pyodidePlugin from "../plugins/pyodide-molpy/src/index";
 import { OFFICIAL_PLUGINS } from "./version";
 
 /**
- * Children exercised here.
- *
- * `pyodide-molpy` is deliberately absent. `src/index.tsx` source-imports every
- * child, and pyodide's entry eagerly imports `@jupyterlite/pyodide-kernel`,
- * whose `kernel.js` requires a `_pypi` module upstream does not ship. The
- * build substitutes it with `NormalModuleReplacementPlugin`
- * (rsbuild.plugin-shared.ts), but rstest resolves node_modules through node's
- * own loader, so the substitution does not apply and importing the collection
- * throws at module load.
- *
- * That is a real architectural constraint, not a test-harness quirk: the
- * artifact that actually ships cannot be imported outside its bundler. The
- * fix is for pyodide-molpy to load the kernel lazily (it is only needed once
- * the Python mode activates), which would also shrink the collection bundle.
- * Until then this file covers the three children it can, and the collection's
- * own wiring is covered only by the build.
+ * Activating pyodide loads `@jupyterlite/pyodide-kernel` on purpose.
+ * Importing it must not: that module needs the rsbuild `_pypi` substitution,
+ * which rstest does not apply. The kernel import is dynamic, inside the
+ * first notebook or script action.
  */
 const TESTABLE_CHILDREN: readonly MolvisPluginModule[] = [
   lammpsPlugin,
@@ -53,10 +42,14 @@ function recordingApi() {
 }
 
 describe("official children", () => {
-  it("covers every plugin on the roster except the kernel one", () => {
-    // If a plugin is added to OFFICIAL_PLUGINS, this fails until it is either
-    // exercised here or explicitly documented above as untestable.
-    expect(TESTABLE_CHILDREN.length).toBe(OFFICIAL_PLUGINS.length - 1);
+  it("imports the python plugin without starting the kernel runtime", () => {
+    expect(pyodidePlugin.id).toBe("com.molcrafts.pyodide-molpy");
+  });
+
+  it("covers every plugin on the roster except activating the kernel", () => {
+    // Activating pyodide pulls the runtime. The other children are activated
+    // below. A new plugin must be added to one of those two groups.
+    expect(TESTABLE_CHILDREN.length + 1).toBe(OFFICIAL_PLUGINS.length);
   });
 
   it("each child registers at least one contribution", () => {
