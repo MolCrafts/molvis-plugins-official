@@ -3,6 +3,12 @@ import pkg from "../package.json";
 /**
  * Meta collection identity (`com.molcrafts.plugins-official`).
  *
+ * The npm workspace name is `@molcrafts/molvis-plugin-official`, the same
+ * singular `molvis-plugin-` prefix as every child. It is a private
+ * package: MolVis installs the GitHub repo `MolCrafts/molvis-plugins-official`.
+ * The plugin id stays `com.molcrafts.plugins-official` so a host that
+ * already loaded v0.5.0 keeps the same namespaced contributions.
+ *
  * Plain semver. `minor` used to mean "number of child plugins", enforced by a
  * script; that spent a semver channel on a directory listing and made removing
  * a plugin a version *decrease* (0.4.0 → 0.3.0), which npm, jsDelivr pins and

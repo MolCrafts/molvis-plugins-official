@@ -4,11 +4,18 @@ import {
   useRef,
   useState,
 } from "react";
-import { createCell, type NotebookCell, type NotebookState } from "../model/cells";
+import {
+  createCell,
+  indexAfterCell,
+  type NotebookCell,
+  type NotebookState,
+} from "../model/cells";
 import {
   downloadNotebookIpynb,
+  flushScheduledNotebookSave,
   loadNotebook,
   saveNotebook,
+  scheduleNotebookSave,
   subscribeNotebookExternal,
 } from "../model/notebook";
 import { IpynbError, ipynbToNotebook } from "../model/ipynb";
@@ -44,7 +51,7 @@ import {
   IconSpinner,
   IconTrash,
 } from "./icons";
-import { describeKernelStatus } from "./kernel_status";
+import { describeKernelStatus, kernelButtonLabel } from "./kernel_status";
 import { css } from "./styles";
 import { tokens } from "./theme";
 
@@ -135,14 +142,17 @@ export function NotebookPanel({
     });
   }, [storage]);
 
-  const persist = useCallback(
-    (next: NotebookState) => {
+  const commit = useCallback(
+    (next: NotebookState, when: "now" | "soon") => {
       nbRef.current = next;
       setNb(next);
-      saveNotebook(storage, next);
+      if (when === "now") saveNotebook(storage, next);
+      else scheduleNotebookSave(storage, next);
     },
     [storage],
   );
+
+  useEffect(() => flushScheduledNotebookSave, []);
 
   /**
    * Replace the notebook from a local `.ipynb`.
@@ -153,7 +163,7 @@ export function NotebookPanel({
   const importNotebookFile = useCallback(
     async (file: File) => {
       try {
-        persist(ipynbToNotebook(await file.text()));
+        commit(ipynbToNotebook(await file.text()), "now");
         setImportError(null);
       } catch (err) {
         setImportError(
@@ -163,22 +173,30 @@ export function NotebookPanel({
         );
       }
     },
-    [persist],
+    [commit],
   );
 
-  const updateCell = (id: string, patch: Partial<NotebookCell>) => {
+  const updateCell = (
+    id: string,
+    patch: Partial<NotebookCell>,
+    when: "now" | "soon" = "now",
+  ) => {
     const current = nbRef.current;
-    persist({
-      ...current,
-      cells: current.cells.map((c) => (c.id === id ? { ...c, ...patch } : c)),
-    });
+    commit(
+      {
+        ...current,
+        cells: current.cells.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+      },
+      when,
+    );
   };
 
   const insertCellAt = (index: number): string => {
-    const cells = [...nb.cells];
+    const current = nbRef.current;
+    const cells = [...current.cells];
     const created = createCell();
-    cells.splice(index, 0, created);
-    persist({ ...nb, cells });
+    cells.splice(Math.max(0, Math.min(index, cells.length)), 0, created);
+    commit({ ...current, cells }, "now");
     setSelectedId(created.id);
     return created.id;
   };
@@ -188,7 +206,12 @@ export function NotebookPanel({
     const cell = nbRef.current.cells.find((c) => c.id === id);
     if (!cell) return false;
     const source = sourceOverride ?? cell.source;
-    updateCell(id, { source, status: "running", output: "", displays: undefined });
+    updateCell(id, {
+      source,
+      status: "running",
+      output: "",
+      displays: undefined,
+    });
     let result: RunResult;
     try {
       result = await run(source, "cell", { cellId: id });
@@ -228,15 +251,22 @@ export function NotebookPanel({
           : c,
       ),
     };
-    persist(next);
+    commit(next, "now");
     return result.ok;
   };
 
-  /** Run a contiguous range, stopping at the first failure. */
+  /**
+   * Run a contiguous range, stopping at the first failure.
+   * The next cell is taken from the notebook after each run, so an insert
+   * during execution is visited and a deletion is not replayed.
+   */
   const runFrom = async (startIndex: number) => {
-    for (const cell of nb.cells.slice(Math.max(0, startIndex))) {
-      const result = await runCell(cell.id);
-      if (result === false) return;
+    let index = Math.max(0, startIndex);
+    while (index < nbRef.current.cells.length) {
+      const id = nbRef.current.cells[index].id;
+      const ok = await runCell(id);
+      if (!ok) return;
+      index = indexAfterCell(nbRef.current.cells, id);
     }
   };
 
@@ -264,16 +294,7 @@ export function NotebookPanel({
   ) : (
     <IconKernelIdle />
   );
-  const kernelLabel =
-    status === "idle"
-      ? "Start kernel"
-      : status === "error"
-        ? "Kernel failed — click to restart"
-        : starting
-          ? "Starting kernel…"
-          : running
-            ? "Kernel busy — click to restart"
-            : "Kernel ready — click to restart";
+  const kernelLabel = kernelButtonLabel(status);
 
   const onKernelClick = () => {
     if (status === "loading") return;
@@ -349,7 +370,7 @@ export function NotebookPanel({
             event.preventDefault();
             const remaining = nb.cells.filter((cell) => cell.id !== selectedId);
             const cells = remaining.length ? remaining : [createCell()];
-            persist({ ...nb, cells });
+            commit({ ...nb, cells }, "now");
             setSelectedId(cells[Math.min(index, cells.length - 1)].id);
             deleteKeyAt.current = 0;
           } else {
@@ -476,29 +497,34 @@ export function NotebookPanel({
               }}
               onLeaveEdit={() => setEditingId(null)}
               onToggleWordWrap={toggleWordWrap}
-              onChange={(source) => updateCell(cell.id, { source })}
+              onChange={(source) => updateCell(cell.id, { source }, "soon")}
               onRun={(source) => void runCell(cell.id, source)}
               onStop={interrupt}
               onRunAndAdvance={(source) => {
-                void runCell(cell.id, source).then(() => {
+                const id = cell.id;
+                void runCell(id, source).then(() => {
+                  const cells = nbRef.current.cells;
+                  const at = cells.findIndex((item) => item.id === id);
                   setEditingId(null);
-                  setSelectedId(nb.cells[index + 1]?.id ?? cell.id);
+                  setSelectedId(cells[at + 1]?.id ?? id);
                 });
               }}
               onRunAndInsert={(source) => {
-                void runCell(cell.id, source).then(() => {
-                  const id = insertCellAt(index + 1);
-                  setEditingId(id);
+                const id = cell.id;
+                void runCell(id, source).then(() => {
+                  const at = nbRef.current.cells.findIndex((item) => item.id === id);
+                  const created = insertCellAt(at + 1);
+                  setEditingId(created);
                 });
               }}
-              onDelete={() =>
-                persist({
-                  ...nb,
-                  cells: nb.cells.filter((c) => c.id !== cell.id).length
-                    ? nb.cells.filter((c) => c.id !== cell.id)
-                    : [createCell()],
-                })
-              }
+              onDelete={() => {
+                const current = nbRef.current;
+                const remaining = current.cells.filter((item) => item.id !== cell.id);
+                commit(
+                  { ...current, cells: remaining.length ? remaining : [createCell()] },
+                  "now",
+                );
+              }}
             />
             <InsertGap onInsert={() => insertCellAt(index + 1)} />
           </div>

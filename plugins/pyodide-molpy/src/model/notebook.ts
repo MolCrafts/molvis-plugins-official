@@ -79,15 +79,58 @@ export function loadNotebook(
   }
 }
 
-export function saveNotebook(
-  storage: { setItem(k: string, v: string): void } | null,
-  state: NotebookState,
-): void {
+const SAVE_DELAY_MS = 400;
+
+type NotebookStore = { setItem(k: string, v: string): void } | null;
+
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingSave: { storage: NotebookStore; state: NotebookState } | null = null;
+
+function writeNotebook(storage: NotebookStore, state: NotebookState): void {
   try {
     storage?.setItem(NOTEBOOK_STORAGE_KEY, JSON.stringify(state));
   } catch {
     /* quota */
   }
+}
+
+/** Persist immediately and drop any keystroke that has not been written yet. */
+export function saveNotebook(storage: NotebookStore, state: NotebookState): void {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  pendingSave = null;
+  writeNotebook(storage, state);
+}
+
+/**
+ * Coalesce typing into one write. A later {@link saveNotebook} cancels this
+ * so a finished cell cannot be overwritten by an older keystroke.
+ */
+export function scheduleNotebookSave(
+  storage: NotebookStore,
+  state: NotebookState,
+): void {
+  pendingSave = { storage, state };
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    const job = pendingSave;
+    pendingSave = null;
+    if (job) writeNotebook(job.storage, job.state);
+  }, SAVE_DELAY_MS);
+}
+
+/** Write the pending keystroke now. No-op when nothing is waiting. */
+export function flushScheduledNotebookSave(): void {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  const job = pendingSave;
+  pendingSave = null;
+  if (job) writeNotebook(job.storage, job.state);
 }
 
 export function downloadNotebookIpynb(state: NotebookState, filename = "notebook.ipynb"): void {

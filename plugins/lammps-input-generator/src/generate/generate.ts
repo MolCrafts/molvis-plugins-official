@@ -14,7 +14,7 @@ import {
   TDAMP_TIMESTEP_MULTIPLE,
 } from "../model/unit_systems";
 
-const GENERATOR_TAG = `molvis-plugins-official / lammps-input-generator v${PLUGIN_VERSION}`;
+const GENERATOR_TAG = `molvis-plugin-official / lammps-input-generator v${PLUGIN_VERSION}`;
 
 /**
  * Reproducible per-stage seed for configs saved before `langevinSeed`

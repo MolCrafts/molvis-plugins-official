@@ -3,12 +3,15 @@ import { saveLibrary, storedScriptCount } from "../src/model/scripts";
 import {
   defaultNotebook,
   demoNotebook,
+  flushScheduledNotebookSave,
   loadNotebook,
+  NOTEBOOK_STORAGE_KEY,
   resetToDemoNotebook,
   saveNotebook,
+  scheduleNotebookSave,
   storedCellCount,
 } from "../src/model/notebook";
-import { createCell } from "../src/model/cells";
+import { createCell, indexAfterCell } from "../src/model/cells";
 
 describe("notebook model", () => {
   it("creates a default notebook with one quick-start cell", () => {
@@ -76,6 +79,50 @@ describe("notebook model", () => {
     const loaded = loadNotebook(storage);
     expect(loaded.cells.length).toBe(2);
     expect(loaded.cells[1].source).toBe("print(2)");
+  });
+});
+
+describe("indexAfterCell", () => {
+  it("continues at the live successor and ends when the id is gone", () => {
+    const cells = [{ id: "a" }, { id: "b" }, { id: "c" }];
+    expect(indexAfterCell(cells, "a")).toBe(1);
+    expect(indexAfterCell(cells, "c")).toBe(3);
+    expect(indexAfterCell(cells, "missing")).toBe(3);
+  });
+});
+
+describe("scheduleNotebookSave", () => {
+  it("does not write until flushed, and an immediate save wins", () => {
+    const store = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        store.set(k, v);
+      },
+    };
+    const typed = { cells: [createCell("typed")], nextExec: 1 };
+    const ran = { cells: [createCell("ran")], nextExec: 2 };
+    scheduleNotebookSave(storage, typed);
+    expect(store.has(NOTEBOOK_STORAGE_KEY)).toBe(false);
+    saveNotebook(storage, ran);
+    flushScheduledNotebookSave();
+    expect(loadNotebook(storage).cells[0].source).toBe("ran");
+  });
+
+  it("flush writes the pending keystroke", () => {
+    const store = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        store.set(k, v);
+      },
+    };
+    scheduleNotebookSave(storage, {
+      cells: [createCell("draft")],
+      nextExec: 1,
+    });
+    flushScheduledNotebookSave();
+    expect(loadNotebook(storage).cells[0].source).toBe("draft");
   });
 });
 

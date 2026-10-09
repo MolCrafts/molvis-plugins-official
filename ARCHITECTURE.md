@@ -70,6 +70,15 @@ export default class Plugin extends MolvisPlugin {
 }
 ```
 
+A pipeline modifier follows the scaffold's `modifiers/scale-x` example:
+register a local kind, pass a menu `label`, and implement
+`toProjectParams` / `fromProjectParams` for settings that must survive
+save and reload. `BaseModifier`, `nextModifierId`, and `readNumber` are
+imported from `@molcrafts/molvis-plugin`. Placing a built molecule on
+the Edit stamp tool is `stageEditMolecule(app, frame)` from that same
+package (carbon-tube-builder keeps a local copy of that call until the
+published SDK re-exports it).
+
 Root `package.json` pins `@molcrafts/molvis-plugin` / `core` / `stage` at
 `0.2.0` from npm. A sibling molvis checkout is optional (kernel Python
 editable install only).

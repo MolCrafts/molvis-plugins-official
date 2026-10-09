@@ -1,6 +1,6 @@
 {
-  "name": "@molcrafts/molvis-plugins-official",
-  "version": "0.5.0",
+  "name": "@molcrafts/molvis-plugin-official",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "sideEffects": false,
