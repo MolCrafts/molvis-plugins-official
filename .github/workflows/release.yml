@@ -1,8 +1,9 @@
 name: release
 
-# A `v*` tag on MolCrafts builds every plugin and uploads the flat assets to
-# the GitHub Release that jsDelivr serves. workflow_dispatch is a dry run
-# anywhere: same gates and staging, assets kept as a workflow artifact.
+# `release / build` runs the checks, builds every plugin and stages the flat
+# assets as a workflow artifact. A `v*` tag on MolCrafts (`publish`) then
+# uploads them to the GitHub Release that jsDelivr serves (`release / assets`).
+# workflow_dispatch is a dry run anywhere: same gates and staging, no upload.
 on:
   push:
     tags: ["v*"]
@@ -11,17 +12,31 @@ on:
 permissions:
   contents: read
 
+# One group per file, workflow, event and ref; a release is never cancelled.
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  assets:
-    name: release / assets
-    if: github.event_name == 'workflow_dispatch' || github.repository_owner == 'MolCrafts'
+  # Where this run happens, decided once: MolCrafts/molcrafts-ci/actions/ci-context.
+  context:
+    name: release / context
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    outputs:
+      tier: ${{ steps.context.outputs.tier }}
+      upstream: ${{ steps.context.outputs.upstream }}
+      integration: ${{ steps.context.outputs.integration }}
+      skip-pr: ${{ steps.context.outputs.skip-pr }}
+      publish: ${{ steps.context.outputs.publish }}
+    steps:
+      - id: context
+        uses: MolCrafts/molcrafts-ci/actions/ci-context@master
+
+  build:
+    name: release / build
+    needs: context
+    if: github.event_name == 'workflow_dispatch' || needs.context.outputs.upstream == 'true'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: MolCrafts/molcrafts-ci/actions/setup-node@master
@@ -55,21 +70,34 @@ jobs:
             (cd "$dir" && zip -qr "../${name}.zip" .)
           done
 
-      - if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7
         with:
           name: release-assets
           path: release-assets/
           if-no-files-found: error
 
+
+  assets:
+    name: release / assets
+    needs: [context, build]
+    # A `v*` tag on MolCrafts, and nothing else: actions/ci-context decides.
+    if: needs.context.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-assets
+          path: release-assets/
       # Meta is the default install: its assets sit at the Release root.
       - name: Upload to the GitHub Release
-        if: github.event_name == 'push' && github.repository_owner == 'MolCrafts'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes
+          TAG="$GITHUB_REF_NAME"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --verify-tag --title "$TAG" --generate-notes
           (cd release-assets/meta && gh release upload "$TAG" ./* --clobber)
           gh release upload "$TAG" release-assets/*.zip --clobber
